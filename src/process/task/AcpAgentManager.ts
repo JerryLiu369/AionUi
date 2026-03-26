@@ -642,6 +642,12 @@ class AcpAgentManager extends BaseAgentManager<AcpAgentManagerData, AcpPermissio
         // It will be cleared when the conversation ends or on error.
         // Exception: if the agent returns a failure (e.g. timeout), clean up
         // immediately so the conversation isn't stuck in a busy/running state.
+        // Safe to clear here because AcpAgent.sendMessage() only returns
+        // {success:false} after the agent has already stopped processing —
+        // e.g. on timeout it sends session/cancel and emits a finish signal
+        // before returning. There is no async gap between the return and this
+        // guard reset; JS's single-threaded event loop guarantees no cron job
+        // can interleave between these two synchronous statements.
         if (!result.success) {
           this.clearBusyState();
         }
@@ -653,6 +659,7 @@ class AcpAgentManager extends BaseAgentManager<AcpAgentManagerData, AcpPermissio
         console.log(
           `[ACP-PERF] manager: agent.sendMessage completed ${Date.now() - agentSendStart}ms (total manager.sendMessage: ${Date.now() - managerSendStart}ms)`
         );
+      // Same guarantee as above: {success:false} means the agent is done.
       if (!result.success) {
         this.clearBusyState();
       }
