@@ -147,6 +147,30 @@ export async function getChannelDefaultModel(platform: PluginType): Promise<TPro
         useModel: anyProvider.model[0],
       } as TProviderWithModel;
     }
+
+    // Before giving up: check if the user has Google OAuth credentials from Gemini CLI.
+    // This handles the common case where no model/provider is explicitly configured for
+    // the channel, but the user has already logged in via `gemini auth login`.
+    const credsPath = path.join(os.homedir(), '.gemini', 'oauth_creds.json');
+    try {
+      const content = fs.readFileSync(credsPath, 'utf-8');
+      const creds = JSON.parse(content);
+      if (creds?.access_token || creds?.refresh_token) {
+        console.log('[SystemActions] No API key provider found; falling back to Google OAuth credentials.');
+        return {
+          id: GOOGLE_AUTH_PROVIDER_ID,
+          name: 'Gemini Google Auth',
+          platform: 'gemini-with-google-auth',
+          baseUrl: '',
+          apiKey: '',
+          model: ['gemini-2.0-flash'],
+          useModel: 'gemini-2.0-flash',
+          enabled: true,
+        } as TProviderWithModel;
+      }
+    } catch {
+      // credentials file missing or unreadable — fall through
+    }
   } catch (error) {
     console.warn('[SystemActions] Failed to get saved model, using default:', error);
   }
