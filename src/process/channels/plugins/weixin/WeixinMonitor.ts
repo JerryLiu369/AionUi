@@ -41,11 +41,6 @@ export type MonitorOptions = {
   agent: WeixinAgent;
   abortSignal?: AbortSignal;
   log?: (msg: string) => void;
-  /**
-   * Return the directory to save attachments into for a given chatId.
-   * Falls back to dataDir/weixin-uploads/ if not provided or throws.
-   */
-  getUploadsDir?: (chatId: string) => Promise<string>;
 };
 
 // ==================== Utilities ====================
@@ -69,7 +64,7 @@ const TEXT_ITEM_TYPE = 1;
 const IMAGE_ITEM_TYPE = 2;
 const FILE_ITEM_TYPE = 4;
 const CDN_BASE_URL = 'https://novac2c.cdn.weixin.qq.com/c2c';
-const UPLOADS_TTL_MS = 24 * 60 * 60 * 1000;
+const UPLOADS_TTL_MS = 72 * 60 * 60 * 1000;
 const UPLOADS_MAX_BYTES = 200 * 1024 * 1024;
 
 // ==================== Internal API types ====================
@@ -331,8 +326,7 @@ async function runMonitor(
   agent: WeixinAgent,
   wechatUin: string,
   signal: AbortSignal | undefined,
-  log: (msg: string) => void,
-  getUploadsDir?: (chatId: string) => Promise<string>
+  log: (msg: string) => void
 ): Promise<void> {
   let buf = loadBuf(dataDir, accountId);
   let consecutiveFailures = 0;
@@ -384,12 +378,7 @@ async function runMonitor(
         // Download attachments if any
         const attachments: WeixinAttachment[] = [];
         if (mediaItems.length > 0) {
-          let uploadsDir: string;
-          try {
-            uploadsDir = getUploadsDir ? await getUploadsDir(conversationId) : path.join(dataDir, 'weixin-uploads');
-          } catch {
-            uploadsDir = path.join(dataDir, 'weixin-uploads');
-          }
+          const uploadsDir = path.join(dataDir, 'weixin-uploads');
           for (const [idx, item] of mediaItems.entries()) {
             try {
               // oxlint-disable-next-line eslint/no-await-in-loop
@@ -445,11 +434,11 @@ async function runMonitor(
  * Errors are logged via opts.log. Loop stops when abortSignal fires.
  */
 export function startMonitor(opts: MonitorOptions): void {
-  const { baseUrl, token, accountId, dataDir, agent, abortSignal, log, getUploadsDir } = opts;
+  const { baseUrl, token, accountId, dataDir, agent, abortSignal, log } = opts;
   const logFn = log ?? ((_msg: string) => {});
   const wechatUin = crypto.randomBytes(4).toString('base64');
 
-  void runMonitor(baseUrl, token, accountId, dataDir, agent, wechatUin, abortSignal, logFn, getUploadsDir).catch(
+  void runMonitor(baseUrl, token, accountId, dataDir, agent, wechatUin, abortSignal, logFn).catch(
     (err: unknown) => {
       if (!abortSignal?.aborted) {
         logFn(`[weixin] monitor terminated unexpectedly: ${String(err)}`);
