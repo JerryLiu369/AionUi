@@ -14,6 +14,7 @@ import { Button, Dropdown, Empty, Menu, Message, Spin, Tooltip } from '@arco-des
 import { CheckOne, CloseOne, Copy, Delete, Down, Refresh } from '@icon-park/react';
 import React, { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { QRCodeSVG } from 'qrcode.react';
 
 type LoginState = 'idle' | 'loading_qr' | 'showing_qr' | 'scanned' | 'connected';
 
@@ -58,7 +59,9 @@ const WeixinConfigForm: React.FC<WeixinConfigFormProps> = ({ pluginStatus, model
   const { t } = useTranslation();
 
   const [loginState, setLoginState] = useState<LoginState>(pluginStatus?.hasToken ? 'connected' : 'idle');
+  // In Electron mode this holds a base64 data URL; in WebUI mode it holds the raw QR ticket string.
   const [qrcodeDataUrl, setQrcodeDataUrl] = useState<string | null>(null);
+  const [isWebUIMode, setIsWebUIMode] = useState(false);
 
   // Pairing state
   const [pairingLoading, setPairingLoading] = useState(false);
@@ -243,49 +246,102 @@ const WeixinConfigForm: React.FC<WeixinConfigFormProps> = ({ pluginStatus, model
     }
   };
 
+  const enableWeixinPlugin = async (accountId: string, botToken: string) => {
+    const enableResult = await channel.enablePlugin.invoke({
+      pluginId: 'weixin_default',
+      config: { accountId, botToken },
+    });
+    if (enableResult.success) {
+      Message.success(t('settings.weixin.pluginEnabled', 'WeChat channel enabled'));
+      const statusResult = await channel.getPluginStatus.invoke();
+      if (statusResult.success && statusResult.data) {
+        const weixinPlugin = statusResult.data.find((p) => p.type === 'weixin');
+        onStatusChange(weixinPlugin || null);
+      }
+      setLoginState('connected');
+    } else {
+      Message.error(enableResult.msg || t('settings.weixin.enableFailed', 'Failed to enable WeChat plugin'));
+      setLoginState('idle');
+    }
+  };
+
+  const handleLoginWebUI = () => {
+    setIsWebUIMode(true);
+    setLoginState('loading_qr');
+    setQrcodeDataUrl(null);
+
+    const es = new EventSource('/api/channel/weixin/login', { withCredentials: true });
+
+    es.addEventListener('qr', (e: MessageEvent) => {
+      const { qrcodeData } = JSON.parse(e.data) as { qrcodeData: string };
+      setQrcodeDataUrl(qrcodeData);
+      setLoginState('showing_qr');
+    });
+
+    es.addEventListener('scanned', () => {
+      setLoginState('scanned');
+    });
+
+    es.addEventListener('done', (e: MessageEvent) => {
+      es.close();
+      const { accountId, botToken } = JSON.parse(e.data) as { accountId: string; botToken: string };
+      enableWeixinPlugin(accountId, botToken).catch((err: unknown) => {
+        const msg = err instanceof Error ? err.message : String(err);
+        Message.error(msg || t('settings.weixin.enableFailed', 'Failed to enable WeChat plugin'));
+        setLoginState('idle');
+        setQrcodeDataUrl(null);
+      });
+    });
+
+    es.addEventListener('error', (e: MessageEvent) => {
+      es.close();
+      const msg = e.data ? ((JSON.parse(e.data) as { message?: string }).message ?? '') : '';
+      if (msg.toLowerCase().includes('expired') || msg.toLowerCase().includes('too many')) {
+        Message.warning(t('settings.weixin.loginExpired', 'QR code expired, please try again'));
+      } else {
+        Message.error(t('settings.weixin.loginError', 'WeChat login failed'));
+      }
+      setLoginState('idle');
+      setQrcodeDataUrl(null);
+    });
+
+    es.onerror = () => {
+      es.close();
+      setLoginState('idle');
+      setQrcodeDataUrl(null);
+    };
+  };
+
   const handleLogin = async () => {
+    if (!window.electronAPI?.weixinLoginStart) {
+      handleLoginWebUI();
+      return;
+    }
+
     setLoginState('loading_qr');
     setQrcodeDataUrl(null);
 
     const unsubQR =
-      window.electronAPI?.weixinLoginOnQR?.(({ qrcodeUrl: dataUrl }: { qrcodeUrl: string }) => {
+      window.electronAPI.weixinLoginOnQR?.(({ qrcodeUrl: dataUrl }: { qrcodeUrl: string }) => {
         setQrcodeDataUrl(dataUrl);
         setLoginState('showing_qr');
       }) ?? (() => {});
     const unsubScanned =
-      window.electronAPI?.weixinLoginOnScanned?.(() => {
+      window.electronAPI.weixinLoginOnScanned?.(() => {
         setLoginState('scanned');
       }) ?? (() => {});
     const unsubDone =
-      window.electronAPI?.weixinLoginOnDone?.(() => {
+      window.electronAPI.weixinLoginOnDone?.(() => {
         // credentials come from the Promise resolve — not this event
       }) ?? (() => {});
 
     try {
-      const result = await window.electronAPI?.weixinLoginStart?.();
+      const result = await window.electronAPI.weixinLoginStart();
       const { accountId, botToken } = result as {
         accountId: string;
         botToken: string;
       };
-
-      // Auto-enable the plugin with obtained credentials
-      const enableResult = await channel.enablePlugin.invoke({
-        pluginId: 'weixin_default',
-        config: { accountId, botToken },
-      });
-
-      if (enableResult.success) {
-        Message.success(t('settings.weixin.pluginEnabled', 'WeChat channel enabled'));
-        const statusResult = await channel.getPluginStatus.invoke();
-        if (statusResult.success && statusResult.data) {
-          const weixinPlugin = statusResult.data.find((p) => p.type === 'weixin');
-          onStatusChange(weixinPlugin || null);
-        }
-        setLoginState('connected');
-      } else {
-        Message.error(enableResult.msg || t('settings.weixin.enableFailed', 'Failed to enable WeChat plugin'));
-        setLoginState('idle');
-      }
+      await enableWeixinPlugin(accountId, botToken);
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
       if (msg.toLowerCase().includes('expired') || msg.toLowerCase().includes('too many')) {
@@ -323,7 +379,12 @@ const WeixinConfigForm: React.FC<WeixinConfigFormProps> = ({ pluginStatus, model
     if (loginState === 'showing_qr' || loginState === 'scanned') {
       return (
         <div className='flex flex-col items-center gap-8px'>
-          {qrcodeDataUrl && <img src={qrcodeDataUrl} alt='WeChat QR code' className='w-160px h-160px rd-8px' />}
+          {qrcodeDataUrl &&
+            (isWebUIMode ? (
+              <QRCodeSVG value={qrcodeDataUrl} size={160} />
+            ) : (
+              <img src={qrcodeDataUrl} alt='WeChat QR code' className='w-160px h-160px rd-8px' />
+            ))}
           {loginState === 'scanned' ? (
             <div className='flex items-center gap-6px text-13px text-t-secondary'>
               <Spin size={14} />
