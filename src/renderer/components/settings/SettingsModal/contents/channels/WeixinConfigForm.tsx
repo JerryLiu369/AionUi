@@ -365,6 +365,22 @@ const WeixinConfigForm: React.FC<WeixinConfigFormProps> = ({ pluginStatus, model
     customAgentId?: string;
   }> = availableAgents.length > 0 ? availableAgents : [{ backend: 'gemini', name: 'Gemini CLI' }];
 
+  const handleDisconnect = async () => {
+    try {
+      const result = await channel.disablePlugin.invoke({ pluginId: 'weixin_default' });
+      if (result.success) {
+        Message.success(t('settings.weixin.pluginDisabled', 'WeChat channel disabled'));
+        onStatusChange(null);
+        setLoginState('idle');
+        setQrcodeDataUrl(null);
+      } else {
+        Message.error(result.msg || t('settings.weixin.disableFailed', 'Failed to disconnect'));
+      }
+    } catch (error) {
+      Message.error(error instanceof Error ? error.message : String(error));
+    }
+  };
+
   const renderLoginArea = () => {
     if (loginState === 'connected' || pluginStatus?.hasToken) {
       return (
@@ -372,6 +388,16 @@ const WeixinConfigForm: React.FC<WeixinConfigFormProps> = ({ pluginStatus, model
           <CheckOne theme='filled' size={16} className='text-green-500' />
           <span className='text-14px text-t-primary'>{t('settings.weixin.connected', '已连接')}</span>
           {pluginStatus?.botUsername && <span className='text-12px text-t-tertiary'>({pluginStatus.botUsername})</span>}
+          <Button
+            type='secondary'
+            size='small'
+            status='danger'
+            onClick={() => {
+              void handleDisconnect();
+            }}
+          >
+            {t('settings.weixin.disconnect', '断开连接')}
+          </Button>
         </div>
       );
     }
