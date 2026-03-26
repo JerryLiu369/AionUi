@@ -8,6 +8,7 @@ import fs from 'fs';
 import path from 'path';
 
 import { getPlatformServices } from '@/common/platform';
+import { getDatabase } from '@process/services/database';
 import type { IChannelPluginConfig, IUnifiedOutgoingMessage, PluginType } from '../../types';
 import { BasePlugin } from '../BasePlugin';
 import { toUnifiedIncomingMessage, stripHtml } from './WeixinAdapter';
@@ -34,6 +35,9 @@ export class WeixinPlugin extends BasePlugin {
   private pendingResponses = new Map<string, PendingResponse>();
   private activeUsers = new Set<string>();
 
+  /** Cached workspace uploads dir — resolved once on first attachment, reused thereafter. */
+  private cachedUploadsDir: string | null = null;
+
   // ==================== Lifecycle ====================
 
   protected async onInitialize(config: IChannelPluginConfig): Promise<void> {
@@ -48,6 +52,7 @@ export class WeixinPlugin extends BasePlugin {
 
   protected async onStart(): Promise<void> {
     this._stopping = false;
+    this.cachedUploadsDir = null;
     this.abortController = new AbortController();
     startMonitor({
       baseUrl: this.baseUrl,
@@ -57,6 +62,7 @@ export class WeixinPlugin extends BasePlugin {
       agent: { chat: (req) => this.handleChat(req) },
       abortSignal: this.abortController.signal,
       log: (msg) => console.log(msg),
+      getUploadsDir: (chatId) => this.resolveUploadsDir(chatId),
     });
   }
 
@@ -72,6 +78,43 @@ export class WeixinPlugin extends BasePlugin {
     this.abortController?.abort();
     this.abortController = null;
     this.activeUsers.clear();
+    this.cachedUploadsDir = null;
+  }
+
+  // ==================== Uploads dir resolution ====================
+
+  /**
+   * Resolve the uploads directory for incoming attachments.
+   *
+   * Returns the cached path if already resolved. Otherwise, looks up the
+   * existing weixin conversation for this chatId to get its workspace, then
+   * returns workspace/uploads/. Falls back to dataDir/weixin-uploads/ if
+   * the conversation has not been created yet (e.g. very first message).
+   */
+  private async resolveUploadsDir(chatId: string): Promise<string> {
+    if (this.cachedUploadsDir) return this.cachedUploadsDir;
+
+    try {
+      const db = await getDatabase();
+      // Try the common conversation types in order.
+      for (const type of ['gemini', 'acp', 'codex', 'openclaw-gateway'] as const) {
+        const result = db.findChannelConversation('weixin', chatId, type);
+        const workspace = result.success && result.data ? (result.data.extra?.workspace as string | undefined) : undefined;
+        if (workspace) {
+          const dir = path.join(workspace, 'uploads');
+          fs.mkdirSync(dir, { recursive: true });
+          this.cachedUploadsDir = dir;
+          return dir;
+        }
+      }
+    } catch {
+      // ignore — fall through to default
+    }
+
+    // Fallback: no conversation yet (first ever message). Use a flat dir under dataDir.
+    const dir = path.join(getPlatformServices().paths.getDataDir(), 'weixin-uploads');
+    fs.mkdirSync(dir, { recursive: true });
+    return dir;
   }
 
   // ==================== BasePlugin interface ====================
