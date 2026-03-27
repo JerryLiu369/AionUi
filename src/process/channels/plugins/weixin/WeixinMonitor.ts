@@ -390,12 +390,18 @@ async function runMonitor(
           if (attachments.length > 0) cleanUploads(uploadsDir);
         }
 
+        if (!text && attachments.length === 0) continue;
+
         // oxlint-disable-next-line eslint/no-await-in-loop
         const stopTyping = await typingMgr.startTyping(conversationId, msg.context_token);
         let response: WeixinChatResponse | undefined;
         try {
           // oxlint-disable-next-line eslint/no-await-in-loop
-          response = await agent.chat({ conversationId, text, attachments: attachments.length > 0 ? attachments : undefined });
+          response = await agent.chat({
+            conversationId,
+            text,
+            attachments: attachments.length > 0 ? attachments : undefined,
+          });
         } catch (agentErr) {
           // oxlint-disable-next-line eslint/no-await-in-loop
           await stopTyping();
@@ -438,11 +444,9 @@ export function startMonitor(opts: MonitorOptions): void {
   const logFn = log ?? ((_msg: string) => {});
   const wechatUin = crypto.randomBytes(4).toString('base64');
 
-  void runMonitor(baseUrl, token, accountId, dataDir, agent, wechatUin, abortSignal, logFn).catch(
-    (err: unknown) => {
-      if (!abortSignal?.aborted) {
-        logFn(`[weixin] monitor terminated unexpectedly: ${String(err)}`);
-      }
+  void runMonitor(baseUrl, token, accountId, dataDir, agent, wechatUin, abortSignal, logFn).catch((err: unknown) => {
+    if (!abortSignal?.aborted) {
+      logFn(`[weixin] monitor terminated unexpectedly: ${String(err)}`);
     }
-  );
+  });
 }
