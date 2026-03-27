@@ -4,6 +4,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import fs from 'fs';
 import os from 'os';
+import path from 'path';
 import { GOOGLE_AUTH_PROVIDER_ID } from '@/common/config/constants';
 
 // Mock electron before any imports
@@ -80,7 +81,7 @@ describe('SystemActions weixin platform handling', () => {
     expect(result.id).toBe(GOOGLE_AUTH_PROVIDER_ID);
     expect(result.platform).toBe('gemini-with-google-auth');
     expect(result.useModel).toBe('gemini-2.5-pro');
-    expect(fs.readFileSync).toHaveBeenCalledWith('/tmp/test-home/.gemini/oauth_creds.json', 'utf-8');
+    expect(fs.readFileSync).toHaveBeenCalledWith(path.join('/tmp/test-home', '.gemini', 'oauth_creds.json'), 'utf-8');
   });
 
   it('falls back to a Gemini API-key provider when Google Auth is selected but local creds are missing', async () => {
