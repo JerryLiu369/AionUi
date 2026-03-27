@@ -2,8 +2,14 @@
  * DOM tests for WeixinConfigForm login state machine.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, act } from '@testing-library/react';
+import { render, screen, fireEvent, act, waitFor } from '@testing-library/react';
 import React from 'react';
+
+const { mockEnablePlugin, mockDisablePlugin, mockGetPluginStatus } = vi.hoisted(() => ({
+  mockEnablePlugin: vi.fn(async () => ({ success: true })),
+  mockDisablePlugin: vi.fn(async () => ({ success: true })),
+  mockGetPluginStatus: vi.fn(async () => ({ success: true, data: [] })),
+}));
 
 // Mock i18next
 vi.mock('react-i18next', () => ({
@@ -31,8 +37,9 @@ Object.defineProperty(window, 'electronAPI', {
 // Mock channel IPC bridge
 vi.mock('@/common/adapter/ipcBridge', () => ({
   channel: {
-    enablePlugin: { invoke: vi.fn(async () => ({ success: true })) },
-    getPluginStatus: { invoke: vi.fn(async () => ({ success: true, data: [] })) },
+    enablePlugin: { invoke: mockEnablePlugin },
+    disablePlugin: { invoke: mockDisablePlugin },
+    getPluginStatus: { invoke: mockGetPluginStatus },
     syncChannelSettings: { invoke: vi.fn(async () => ({ success: true })) },
     getPendingPairings: { invoke: vi.fn(async () => ({ success: true, data: [] })) },
     getAuthorizedUsers: { invoke: vi.fn(async () => ({ success: true, data: [] })) },
@@ -52,6 +59,10 @@ vi.mock('@/renderer/pages/conversation/platforms/gemini/GeminiModelSelector', ()
   default: () => <div data-testid='model-selector' />,
 }));
 
+vi.mock('qrcode.react', () => ({
+  QRCodeSVG: ({ value }: { value: string }) => <div data-testid='webui-qr'>{value}</div>,
+}));
+
 import WeixinConfigForm from '@/renderer/components/settings/SettingsModal/contents/channels/WeixinConfigForm';
 
 const noopModelSelection = {
@@ -60,9 +71,47 @@ const noopModelSelection = {
   onSelectModel: vi.fn(),
 } as any;
 
+class MockEventSource {
+  static instances: MockEventSource[] = [];
+  listeners = new Map<string, Array<(event: MessageEvent) => void>>();
+  onerror: null | (() => void) = null;
+  close = vi.fn();
+
+  constructor(
+    public readonly url: string,
+    public readonly options?: EventSourceInit
+  ) {
+    MockEventSource.instances.push(this);
+  }
+
+  addEventListener(type: string, listener: (event: MessageEvent) => void) {
+    const handlers = this.listeners.get(type) ?? [];
+    handlers.push(listener);
+    this.listeners.set(type, handlers);
+  }
+
+  emit(type: string, data: unknown = {}) {
+    const event = { data: JSON.stringify(data) } as MessageEvent;
+    for (const listener of this.listeners.get(type) ?? []) {
+      listener(event);
+    }
+  }
+}
+
 describe('WeixinConfigForm', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    MockEventSource.instances.length = 0;
+    Object.defineProperty(window, 'EventSource', {
+      value: MockEventSource,
+      writable: true,
+    });
+    window.electronAPI = {
+      weixinLoginStart: mockWeixinLoginStart,
+      weixinLoginOnQR: mockWeixinLoginOnQR,
+      weixinLoginOnScanned: mockWeixinLoginOnScanned,
+      weixinLoginOnDone: mockWeixinLoginOnDone,
+    } as typeof window.electronAPI;
     mockWeixinLoginOnQR.mockReturnValue(vi.fn());
     mockWeixinLoginOnScanned.mockReturnValue(vi.fn());
     mockWeixinLoginOnDone.mockReturnValue(vi.fn());
@@ -162,5 +211,103 @@ describe('WeixinConfigForm', () => {
     expect(screen.getByText('已连接')).toBeTruthy();
     // Login button should not be shown
     expect(screen.queryByText('扫码登录')).toBeNull();
+  });
+
+  it('does not show connected state when plugin has token but is disabled', () => {
+    const pluginStatus = {
+      id: 'weixin_default',
+      type: 'weixin',
+      enabled: false,
+      connected: false,
+      hasToken: true,
+      name: 'WeChat',
+      status: 'stopped' as const,
+    };
+
+    render(
+      <WeixinConfigForm
+        pluginStatus={pluginStatus as any}
+        modelSelection={noopModelSelection}
+        onStatusChange={vi.fn()}
+      />
+    );
+
+    expect(screen.queryByText('已连接')).toBeNull();
+    expect(screen.getByText('扫码登录')).toBeTruthy();
+  });
+
+  it('uses the WebUI EventSource login flow when electron login bridge is unavailable', async () => {
+    const onStatusChange = vi.fn();
+    window.electronAPI = {} as typeof window.electronAPI;
+    mockGetPluginStatus.mockResolvedValueOnce({
+      success: true,
+      data: [{ id: 'weixin_default', type: 'weixin', enabled: true, hasToken: true, status: 'running' }],
+    });
+
+    render(
+      <WeixinConfigForm pluginStatus={null} modelSelection={noopModelSelection} onStatusChange={onStatusChange} />
+    );
+
+    await act(async () => {
+      fireEvent.click(screen.getByText('扫码登录'));
+    });
+
+    const es = MockEventSource.instances[0];
+    expect(es?.url).toBe('/api/channel/weixin/login');
+    expect(es?.options).toEqual({ withCredentials: true });
+
+    await act(async () => {
+      es?.emit('qr', { qrcodeData: 'ticket_webui_1' });
+    });
+    expect(screen.getByTestId('webui-qr').textContent).toContain('ticket_webui_1');
+
+    await act(async () => {
+      es?.emit('scanned');
+    });
+    expect(screen.getByText('已扫码，等待确认...')).toBeTruthy();
+
+    await act(async () => {
+      es?.emit('done', { accountId: 'acc-1', botToken: 'bot-1' });
+    });
+
+    await waitFor(() => {
+      expect(mockEnablePlugin).toHaveBeenCalledWith({
+        pluginId: 'weixin_default',
+        config: { accountId: 'acc-1', botToken: 'bot-1' },
+      });
+    });
+    expect(es?.close).toHaveBeenCalled();
+    expect(onStatusChange).toHaveBeenCalledWith(expect.objectContaining({ type: 'weixin', enabled: true }));
+  });
+
+  it('allows disconnecting from the connected state', async () => {
+    const onStatusChange = vi.fn();
+    const pluginStatus = {
+      id: 'weixin_default',
+      type: 'weixin',
+      enabled: true,
+      connected: true,
+      hasToken: true,
+      name: 'WeChat',
+      status: 'running' as const,
+    };
+
+    render(
+      <WeixinConfigForm
+        pluginStatus={pluginStatus as any}
+        modelSelection={noopModelSelection}
+        onStatusChange={onStatusChange}
+      />
+    );
+
+    await act(async () => {
+      fireEvent.click(screen.getByText('断开连接'));
+    });
+
+    expect(mockDisablePlugin).toHaveBeenCalledWith({ pluginId: 'weixin_default' });
+    expect(onStatusChange).toHaveBeenCalledWith(null);
+    await waitFor(() => {
+      expect(screen.getByText('扫码登录')).toBeTruthy();
+    });
   });
 });
