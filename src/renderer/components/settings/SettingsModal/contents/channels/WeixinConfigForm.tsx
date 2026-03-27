@@ -58,7 +58,9 @@ const formatTime = (timestamp: number) => new Date(timestamp).toLocaleString();
 const WeixinConfigForm: React.FC<WeixinConfigFormProps> = ({ pluginStatus, modelSelection, onStatusChange }) => {
   const { t } = useTranslation();
 
-  const [loginState, setLoginState] = useState<LoginState>(pluginStatus?.hasToken ? 'connected' : 'idle');
+  const [loginState, setLoginState] = useState<LoginState>(
+    pluginStatus?.hasToken && pluginStatus?.enabled ? 'connected' : 'idle'
+  );
   // In Electron mode this holds a base64 data URL; in WebUI mode it holds the raw QR ticket string.
   const [qrcodeDataUrl, setQrcodeDataUrl] = useState<string | null>(null);
   const [isWebUIMode, setIsWebUIMode] = useState(false);
