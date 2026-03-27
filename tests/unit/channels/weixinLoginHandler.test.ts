@@ -43,16 +43,10 @@ describe('WeixinLoginHandler', () => {
     let capturedOnDone: ((r: unknown) => void) | undefined;
 
     mockStartLoginFn = vi.fn(
-      ({
-        onQR,
-        onDone,
-      }: {
-        onQR: (url: string, qrcodeData: string) => void;
-        onDone: (r: unknown) => void;
-      }) => {
-      capturedOnQR = onQR;
-      capturedOnDone = onDone;
-      return { abort: vi.fn() };
+      ({ onQR, onDone }: { onQR: (url: string, qrcodeData: string) => void; onDone: (r: unknown) => void }) => {
+        capturedOnQR = onQR;
+        capturedOnDone = onDone;
+        return { abort: vi.fn() };
       }
     );
 
