@@ -281,8 +281,7 @@ describe('WeixinConfigForm', () => {
   });
 
   it('allows disconnecting from the connected state', async () => {
-    const onStatusChange = vi.fn();
-    const pluginStatus = {
+    const initialPluginStatus = {
       id: 'weixin_default',
       type: 'weixin',
       enabled: true,
@@ -292,13 +291,24 @@ describe('WeixinConfigForm', () => {
       status: 'running' as const,
     };
 
-    render(
-      <WeixinConfigForm
-        pluginStatus={pluginStatus as any}
-        modelSelection={noopModelSelection}
-        onStatusChange={onStatusChange}
-      />
-    );
+    const onStatusChange = vi.fn();
+
+    const TestHarness = () => {
+      const [status, setStatus] = React.useState(initialPluginStatus as any);
+
+      return (
+        <WeixinConfigForm
+          pluginStatus={status}
+          modelSelection={noopModelSelection}
+          onStatusChange={(nextStatus) => {
+            onStatusChange(nextStatus);
+            setStatus(nextStatus);
+          }}
+        />
+      );
+    };
+
+    render(<TestHarness />);
 
     await act(async () => {
       fireEvent.click(screen.getByText('断开连接'));
