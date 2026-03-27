@@ -79,9 +79,11 @@ const WeixinConfigForm: React.FC<WeixinConfigFormProps> = ({ pluginStatus, model
     customAgentId?: string;
   }>({ backend: 'gemini' });
 
-  // Sync connected state when pluginStatus changes externally
+  // Sync connected state when pluginStatus changes externally.
+  // Require enabled to be true so that a post-disable pluginStatusChanged event
+  // (which still carries hasToken: true but enabled: false) does not flip back to connected.
   useEffect(() => {
-    if (pluginStatus?.hasToken && loginState === 'idle') {
+    if (pluginStatus?.hasToken && pluginStatus?.enabled && loginState === 'idle') {
       setLoginState('connected');
     }
   }, [pluginStatus, loginState]);
@@ -382,7 +384,7 @@ const WeixinConfigForm: React.FC<WeixinConfigFormProps> = ({ pluginStatus, model
   };
 
   const renderLoginArea = () => {
-    if (loginState === 'connected' || pluginStatus?.hasToken) {
+    if (loginState === 'connected' || (pluginStatus?.hasToken && pluginStatus?.enabled)) {
       return (
         <div className='flex items-center gap-8px'>
           <CheckOne theme='filled' size={16} className='text-green-500' />
