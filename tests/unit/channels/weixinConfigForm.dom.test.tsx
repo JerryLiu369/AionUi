@@ -11,6 +11,19 @@ const { mockEnablePlugin, mockDisablePlugin, mockGetPluginStatus } = vi.hoisted(
   mockGetPluginStatus: vi.fn(async () => ({ success: true, data: [] })),
 }));
 
+vi.mock('@arco-design/web-react', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@arco-design/web-react')>();
+  return {
+    ...actual,
+    Message: {
+      success: vi.fn(),
+      error: vi.fn(),
+      warning: vi.fn(),
+      info: vi.fn(),
+    },
+  };
+});
+
 // Mock i18next
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
