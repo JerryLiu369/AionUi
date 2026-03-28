@@ -12,7 +12,7 @@ import type { GeminiModelSelection } from '@/renderer/pages/conversation/platfor
 import type { AcpBackendAll } from '@/common/types/acpTypes';
 import { Button, Dropdown, Empty, Menu, Message, Spin, Tooltip } from '@arco-design/web-react';
 import { CheckOne, CloseOne, Copy, Delete, Down, Refresh } from '@icon-park/react';
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { QRCodeSVG } from 'qrcode.react';
 
@@ -64,6 +64,7 @@ const WeixinConfigForm: React.FC<WeixinConfigFormProps> = ({ pluginStatus, model
   // In Electron mode this holds a base64 data URL; in WebUI mode it holds the raw QR ticket string.
   const [qrcodeDataUrl, setQrcodeDataUrl] = useState<string | null>(null);
   const [isWebUIMode, setIsWebUIMode] = useState(false);
+  const eventSourceRef = useRef<EventSource | null>(null);
 
   // Pairing state
   const [pairingLoading, setPairingLoading] = useState(false);
@@ -80,6 +81,14 @@ const WeixinConfigForm: React.FC<WeixinConfigFormProps> = ({ pluginStatus, model
     name?: string;
     customAgentId?: string;
   }>({ backend: 'gemini' });
+
+  // Close EventSource on unmount to prevent connection leaks.
+  useEffect(() => {
+    return () => {
+      eventSourceRef.current?.close();
+      eventSourceRef.current = null;
+    };
+  }, []);
 
   // Sync connected state when pluginStatus changes externally.
   // Require enabled to be true so that a post-disable pluginStatusChanged event
@@ -275,6 +284,7 @@ const WeixinConfigForm: React.FC<WeixinConfigFormProps> = ({ pluginStatus, model
     setQrcodeDataUrl(null);
 
     const es = new EventSource('/api/channel/weixin/login', { withCredentials: true });
+    eventSourceRef.current = es;
 
     es.addEventListener('qr', (e: MessageEvent) => {
       const { qrcodeData } = JSON.parse(e.data) as { qrcodeData: string };

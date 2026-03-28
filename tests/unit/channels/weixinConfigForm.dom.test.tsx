@@ -293,6 +293,125 @@ describe('WeixinConfigForm', () => {
     expect(onStatusChange).toHaveBeenCalledWith(expect.objectContaining({ type: 'weixin', enabled: true }));
   });
 
+  it('resets to idle when enableWeixinPlugin fails in WebUI mode', async () => {
+    window.electronAPI = {} as typeof window.electronAPI;
+    mockEnablePlugin.mockResolvedValueOnce({ success: false, msg: 'Enable failed' });
+
+    render(<WeixinConfigForm pluginStatus={null} modelSelection={noopModelSelection} onStatusChange={vi.fn()} />);
+
+    await act(async () => {
+      fireEvent.click(screen.getByText('扫码登录'));
+    });
+
+    const es = MockEventSource.instances[0];
+
+    await act(async () => {
+      es?.emit('done', { accountId: 'acc-1', botToken: 'bot-1' });
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText('扫码登录')).toBeTruthy();
+    });
+  });
+
+  it('resets to idle when SSE error event contains expired message', async () => {
+    window.electronAPI = {} as typeof window.electronAPI;
+
+    render(<WeixinConfigForm pluginStatus={null} modelSelection={noopModelSelection} onStatusChange={vi.fn()} />);
+
+    await act(async () => {
+      fireEvent.click(screen.getByText('扫码登录'));
+    });
+
+    const es = MockEventSource.instances[0];
+
+    await act(async () => {
+      es?.emit('qr', { qrcodeData: 'ticket_1' });
+    });
+
+    await act(async () => {
+      es?.emit('error', { message: 'QR code expired' });
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText('扫码登录')).toBeTruthy();
+    });
+    expect(es?.close).toHaveBeenCalled();
+  });
+
+  it('resets to idle when SSE error event contains non-expired message', async () => {
+    window.electronAPI = {} as typeof window.electronAPI;
+
+    render(<WeixinConfigForm pluginStatus={null} modelSelection={noopModelSelection} onStatusChange={vi.fn()} />);
+
+    await act(async () => {
+      fireEvent.click(screen.getByText('扫码登录'));
+    });
+
+    const es = MockEventSource.instances[0];
+
+    await act(async () => {
+      es?.emit('qr', { qrcodeData: 'ticket_2' });
+    });
+
+    await act(async () => {
+      es?.emit('error', { message: 'server internal error' });
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText('扫码登录')).toBeTruthy();
+    });
+    expect(es?.close).toHaveBeenCalled();
+  });
+
+  it('stays connected when handleDisconnect fails', async () => {
+    mockDisablePlugin.mockResolvedValueOnce({ success: false, msg: 'Disable failed' });
+
+    const pluginStatus = {
+      id: 'weixin_default',
+      type: 'weixin',
+      enabled: true,
+      connected: true,
+      hasToken: true,
+      name: 'WeChat',
+      status: 'running' as const,
+    };
+
+    render(
+      <WeixinConfigForm
+        pluginStatus={pluginStatus as any}
+        modelSelection={noopModelSelection}
+        onStatusChange={vi.fn()}
+      />
+    );
+
+    await act(async () => {
+      fireEvent.click(screen.getByText('断开连接'));
+    });
+
+    expect(mockDisablePlugin).toHaveBeenCalledWith({ pluginId: 'weixin_default' });
+    expect(screen.getByText('已连接')).toBeTruthy();
+  });
+
+  it('closes EventSource on component unmount', async () => {
+    window.electronAPI = {} as typeof window.electronAPI;
+
+    const { unmount } = render(
+      <WeixinConfigForm pluginStatus={null} modelSelection={noopModelSelection} onStatusChange={vi.fn()} />
+    );
+
+    await act(async () => {
+      fireEvent.click(screen.getByText('扫码登录'));
+    });
+
+    const es = MockEventSource.instances[0];
+    expect(es).toBeTruthy();
+
+    unmount();
+
+    expect(es?.close).toHaveBeenCalled();
+  });
+
   it('allows disconnecting from the connected state', async () => {
     const initialPluginStatus = {
       id: 'weixin_default',
