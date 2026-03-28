@@ -84,7 +84,7 @@ export async function getChannelDefaultModel(platform: PluginType): Promise<TPro
         const credsPath = path.join(os.homedir(), '.gemini', 'oauth_creds.json');
         let hasLocalCreds = false;
         try {
-          const content = fs.readFileSync(credsPath, 'utf-8');
+          const content = await fs.promises.readFile(credsPath, 'utf-8');
           const creds = JSON.parse(content);
           hasLocalCreds = !!(creds?.access_token || creds?.refresh_token);
         } catch {
@@ -153,10 +153,10 @@ export async function getChannelDefaultModel(platform: PluginType): Promise<TPro
     // the channel, but the user has already logged in via `gemini auth login`.
     const credsPath = path.join(os.homedir(), '.gemini', 'oauth_creds.json');
     try {
-      const content = fs.readFileSync(credsPath, 'utf-8');
+      const content = await fs.promises.readFile(credsPath, 'utf-8');
       const creds = JSON.parse(content);
       if (creds?.access_token || creds?.refresh_token) {
-        console.log('[SystemActions] No API key provider found; falling back to Google OAuth credentials.');
+        console.warn('[SystemActions] No API key provider found; falling back to Google OAuth credentials.');
         return {
           id: GOOGLE_AUTH_PROVIDER_ID,
           name: 'Gemini Google Auth',

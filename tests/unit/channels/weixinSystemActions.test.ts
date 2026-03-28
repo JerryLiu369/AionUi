@@ -74,14 +74,17 @@ describe('SystemActions weixin platform handling', () => {
       return Promise.resolve(undefined);
     });
     vi.spyOn(os, 'homedir').mockReturnValue('/tmp/test-home');
-    vi.spyOn(fs, 'readFileSync').mockReturnValue(JSON.stringify({ access_token: 'token' }) as never);
+    vi.spyOn(fs.promises, 'readFile').mockResolvedValue(JSON.stringify({ access_token: 'token' }) as never);
 
     const result = await getChannelDefaultModel('weixin');
 
     expect(result.id).toBe(GOOGLE_AUTH_PROVIDER_ID);
     expect(result.platform).toBe('gemini-with-google-auth');
     expect(result.useModel).toBe('gemini-2.5-pro');
-    expect(fs.readFileSync).toHaveBeenCalledWith(path.join('/tmp/test-home', '.gemini', 'oauth_creds.json'), 'utf-8');
+    expect(fs.promises.readFile).toHaveBeenCalledWith(
+      path.join('/tmp/test-home', '.gemini', 'oauth_creds.json'),
+      'utf-8'
+    );
   });
 
   it('falls back to a Gemini API-key provider when Google Auth is selected but local creds are missing', async () => {
@@ -104,9 +107,7 @@ describe('SystemActions weixin platform handling', () => {
       return Promise.resolve(undefined);
     });
     vi.spyOn(os, 'homedir').mockReturnValue('/tmp/test-home');
-    vi.spyOn(fs, 'readFileSync').mockImplementation(() => {
-      throw new Error('missing creds');
-    });
+    vi.spyOn(fs.promises, 'readFile').mockRejectedValue(new Error('missing creds'));
 
     const result = await getChannelDefaultModel('weixin');
 
@@ -123,7 +124,7 @@ describe('SystemActions weixin platform handling', () => {
       return Promise.resolve(undefined);
     });
     vi.spyOn(os, 'homedir').mockReturnValue('/tmp/test-home');
-    vi.spyOn(fs, 'readFileSync').mockReturnValue(JSON.stringify({ refresh_token: 'refresh' }) as never);
+    vi.spyOn(fs.promises, 'readFile').mockResolvedValue(JSON.stringify({ refresh_token: 'refresh' }) as never);
 
     const result = await getChannelDefaultModel('weixin');
 
