@@ -264,7 +264,8 @@ async function downloadMediaItem(
   const { ext, kind } = sniffExtAndKind(resultBuf);
   const declaredName = String(itemData?.file_name ?? (item.type === IMAGE_ITEM_TYPE ? 'image' : 'file'));
   const safeName = declaredName.replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 64);
-  const fileName = `${msgId}-${idx}-${safeName}${ext}`;
+  const safeMsgId = msgId.replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 48);
+  const fileName = `${safeMsgId}-${idx}-${safeName}${ext}`;
   const filePath = path.join(uploadsDir, fileName);
 
   fs.mkdirSync(uploadsDir, { recursive: true });
