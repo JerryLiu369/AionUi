@@ -138,6 +138,20 @@ describe('WeixinMonitor — text message delivery', () => {
     expect(agentChat).not.toHaveBeenCalled();
   });
 
+  it('does not call agent.chat for voice items without transcription text', async () => {
+    const agentChat = vi.fn();
+    const controller = mockFetchOnce({
+      ret: 0,
+      msgs: [{ from_user_id: 'user_123', item_list: [{ type: 3, voice_item: {} }] }],
+      get_updates_buf: '',
+    });
+
+    startMonitor(makeOpts({ agent: { chat: agentChat }, abortSignal: controller.signal }));
+    await new Promise((r) => setTimeout(r, 60));
+
+    expect(agentChat).not.toHaveBeenCalled();
+  });
+
   it('downloads media attachments, saves them locally, and passes them to agent.chat', async () => {
     const agentChat = vi.fn().mockResolvedValue({ text: 'Received attachments' });
     let sentBody: unknown;
