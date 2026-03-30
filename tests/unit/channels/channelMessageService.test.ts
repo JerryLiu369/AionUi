@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ChannelMessageService } from '@process/channels/agent/ChannelMessageService';
 import { workerTaskManager } from '@process/task/workerTaskManagerSingleton';
 import * as databaseModule from '@process/services/database';
@@ -13,6 +13,11 @@ describe('ChannelMessageService', () => {
   beforeEach(() => {
     vi.useFakeTimers();
     vi.restoreAllMocks();
+  });
+
+  afterEach(() => {
+    vi.clearAllTimers();
+    vi.useRealTimers();
   });
 
   it('waits for Gemini continuation after a tool-only finish', async () => {
@@ -129,11 +134,14 @@ describe('ChannelMessageService', () => {
       sendMessage: sendTaskMessage,
     } as any);
 
-    void service.sendMessage('session-1', 'conv-3', 'hello', vi.fn());
+    const newStreamPromise = service.sendMessage('session-1', 'conv-3', 'hello', vi.fn());
     await flushMicrotasks();
 
     expect(sendTaskMessage).toHaveBeenCalled();
     expect(oldResolve).toHaveBeenCalledWith('old-msg');
     expect(oldReject).not.toHaveBeenCalled();
+
+    service.clearStreamByConversationId('conv-3');
+    await expect(newStreamPromise).resolves.toContain('channel_msg_');
   });
 });
