@@ -1,9 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ChannelMessageService } from '@process/channels/agent/ChannelMessageService';
+import { workerTaskManager } from '@process/task/workerTaskManagerSingleton';
+import * as databaseModule from '@process/services/database';
+
+const flushMicrotasks = async (count = 5) => {
+  for (let i = 0; i < count; i++) {
+    await Promise.resolve();
+  }
+};
 
 describe('ChannelMessageService', () => {
   beforeEach(() => {
     vi.useFakeTimers();
+    vi.restoreAllMocks();
   });
 
   it('waits for Gemini continuation after a tool-only finish', async () => {
@@ -91,5 +100,40 @@ describe('ChannelMessageService', () => {
     service.handleAgentMessage({ conversation_id: 'conv-2', type: 'finish', msg_id: 'msg-2', data: '' });
 
     expect(resolve).toHaveBeenCalledWith('msg-2');
+  });
+
+  it('settles a waiting tool-only stream before replacing it with a new send', async () => {
+    const service = new ChannelMessageService() as any;
+    const oldResolve = vi.fn();
+    const oldReject = vi.fn();
+
+    service.activeStreams.set('conv-3', {
+      msgId: 'old-msg',
+      callback: vi.fn(),
+      buffer: '',
+      resolve: oldResolve,
+      reject: oldReject,
+      turnCount: 1,
+      finishCount: 1,
+      lastVisibleMessageType: 'tool_group',
+      finishTimer: setTimeout(() => {}, 15_000),
+    });
+
+    vi.spyOn(databaseModule, 'getDatabase').mockResolvedValue({
+      getConversation: () => ({ success: false }),
+    } as any);
+
+    const sendTaskMessage = vi.fn().mockResolvedValue(undefined);
+    vi.spyOn(workerTaskManager, 'getOrBuildTask').mockResolvedValue({
+      type: 'gemini',
+      sendMessage: sendTaskMessage,
+    } as any);
+
+    void service.sendMessage('session-1', 'conv-3', 'hello', vi.fn());
+    await flushMicrotasks();
+
+    expect(sendTaskMessage).toHaveBeenCalled();
+    expect(oldResolve).toHaveBeenCalledWith('old-msg');
+    expect(oldReject).not.toHaveBeenCalled();
   });
 });

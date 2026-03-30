@@ -229,6 +229,11 @@ export class ChannelMessageService {
     }
 
     return new Promise((resolve, reject) => {
+      const existingStream = this.activeStreams.get(conversationId);
+      if (existingStream) {
+        this.resolveStream(conversationId, existingStream);
+      }
+
       // 注册流状态
       // Register stream state
       this.activeStreams.set(conversationId, {
