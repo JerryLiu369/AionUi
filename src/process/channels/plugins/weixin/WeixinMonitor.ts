@@ -55,6 +55,35 @@ function formatError(err: unknown): string {
   return String(err);
 }
 
+function stringifyLogValue(value: unknown): string {
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return String(value);
+  }
+}
+
+function summarizeUploadUrlResponse(data: unknown): string {
+  if (!data || typeof data !== 'object' || Array.isArray(data)) {
+    return stringifyLogValue(data);
+  }
+
+  const record = data as Record<string, unknown>;
+  const summary = {
+    keys: Object.keys(record),
+    ret: record.ret,
+    errcode: record.errcode,
+    errmsg: record.errmsg,
+    msg: record.msg,
+    message: record.message,
+    upload_full_url_type: typeof record.upload_full_url,
+    upload_full_url_preview:
+      typeof record.upload_full_url === 'string' ? record.upload_full_url.slice(0, 160) : record.upload_full_url,
+  };
+
+  return stringifyLogValue(summary);
+}
+
 // ==================== Constants ====================
 
 const LONG_POLL_TIMEOUT_MS = 35_000;
@@ -62,6 +91,7 @@ const API_TIMEOUT_MS = 15_000;
 const RETRY_DELAY_MS = 2_000;
 const BACKOFF_DELAY_MS = 30_000;
 const MAX_CONSECUTIVE_FAILURES = 3;
+const UPLOAD_MAX_RETRIES = 3;
 const TEXT_ITEM_TYPE = 1;
 const IMAGE_ITEM_TYPE = 2;
 const VOICE_ITEM_TYPE = 3;
@@ -100,6 +130,11 @@ type WeixinRawMessage = {
   context_token?: string;
   msg_id?: string;
   item_list?: WeixinRawItem[];
+};
+
+type GetUploadUrlResp = {
+  upload_param?: string;
+  upload_full_url?: string;
 };
 
 // ==================== HTTP ====================
@@ -229,9 +264,10 @@ async function callGetUploadUrl(
   action: IChannelMediaAction,
   fileData: Buffer,
   aesKeyHex: string,
-  fileKey: string
-): Promise<string> {
-  const data = await apiPost<{ upload_param?: string }>(
+  fileKey: string,
+  log?: (msg: string) => void
+): Promise<{ uploadFullUrl?: string; uploadParam?: string }> {
+  const data = await apiPost<GetUploadUrlResp>(
     baseUrl,
     'ilink/bot/getuploadurl',
     {
@@ -251,44 +287,88 @@ async function callGetUploadUrl(
   );
 
   const uploadParam = String(data.upload_param ?? '').trim();
-  if (!uploadParam) {
-    throw new Error('getuploadurl missing upload_param');
+  const uploadUrl = String(data.upload_full_url ?? '').trim();
+  if (!uploadUrl && !uploadParam) {
+    log?.(
+      `[weixin] getuploadurl missing upload url for ${toUserId}: ${summarizeUploadUrlResponse(data)} metadata=${stringifyLogValue({ type: action.type, fileName: action.fileName || path.basename(action.path), path: action.path, size: fileData.length })}`
+    );
+    throw new Error('getuploadurl missing upload url');
   }
-  return uploadParam;
+  return {
+    uploadFullUrl: uploadUrl || undefined,
+    uploadParam: uploadParam || undefined,
+  };
+}
+
+function buildCdnUploadUrl(uploadParam: string, fileKey: string): string {
+  return `${CDN_BASE_URL}/upload?encrypted_query_param=${encodeURIComponent(uploadParam)}&filekey=${encodeURIComponent(fileKey)}`;
 }
 
 async function uploadBufferToCdn(
   fileData: Buffer,
-  uploadParam: string,
+  upload: { uploadFullUrl?: string; uploadParam?: string },
   fileKey: string,
-  aesKey: Buffer
+  aesKey: Buffer,
+  log?: (msg: string) => void
 ): Promise<{
   downloadEncryptedQueryParam: string;
   ciphertextSize: number;
 }> {
   const ciphertext = encryptAesEcb(fileData, aesKey);
-  const cdnUrl = `${CDN_BASE_URL}/upload?encrypted_query_param=${encodeURIComponent(uploadParam)}&filekey=${encodeURIComponent(fileKey)}`;
-  const resp = await fetch(cdnUrl, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/octet-stream',
-    },
-    body: new Uint8Array(ciphertext),
-    signal: AbortSignal.timeout(30_000),
-  });
+  const trimmedUploadFullUrl = upload.uploadFullUrl?.trim();
+  const uploadUrl = trimmedUploadFullUrl
+    ? trimmedUploadFullUrl
+    : upload.uploadParam
+      ? buildCdnUploadUrl(upload.uploadParam, fileKey)
+      : '';
 
-  const downloadEncryptedQueryParam = String(resp.headers.get('x-encrypted-param') ?? '').trim();
-  if (!resp.ok) {
-    throw new Error(`CDN upload failed: HTTP ${resp.status}`);
-  }
-  if (!downloadEncryptedQueryParam) {
-    throw new Error('CDN upload succeeded without x-encrypted-param');
+  if (!uploadUrl) {
+    throw new Error('CDN upload URL missing');
   }
 
-  return {
-    downloadEncryptedQueryParam,
-    ciphertextSize: ciphertext.length,
-  };
+  let lastError: Error | undefined;
+  for (let attempt = 1; attempt <= UPLOAD_MAX_RETRIES; attempt++) {
+    try {
+      const resp = await fetch(uploadUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/octet-stream',
+        },
+        body: new Uint8Array(ciphertext),
+        signal: AbortSignal.timeout(30_000),
+      });
+      const errorHeader = String(resp.headers.get('x-error-message') ?? '').trim();
+      const downloadEncryptedQueryParam = String(resp.headers.get('x-encrypted-param') ?? '').trim();
+
+      if (resp.status >= 400 && resp.status < 500) {
+        throw new Error(`CDN upload client error ${resp.status}: ${errorHeader || 'no error message'}`);
+      }
+      if (resp.status !== 200) {
+        throw new Error(`CDN upload server error ${resp.status}: ${errorHeader || 'no error message'}`);
+      }
+      if (!downloadEncryptedQueryParam) {
+        throw new Error('CDN upload response missing x-encrypted-param header');
+      }
+
+      return {
+        downloadEncryptedQueryParam,
+        ciphertextSize: ciphertext.length,
+      };
+    } catch (err) {
+      const uploadError = err instanceof Error ? err : new Error(String(err));
+      lastError = uploadError;
+      if (uploadError.message.includes('client error')) {
+        throw uploadError;
+      }
+      if (attempt < UPLOAD_MAX_RETRIES) {
+        log?.(`[weixin] CDN upload attempt ${attempt} failed for ${fileKey}, retrying: ${uploadError.message}`);
+      } else {
+        log?.(`[weixin] CDN upload failed for ${fileKey} after ${UPLOAD_MAX_RETRIES} attempts: ${uploadError.message}`);
+      }
+    }
+  }
+
+  throw lastError ?? new Error('CDN upload failed');
 }
 
 async function uploadMediaAction(
@@ -296,7 +376,8 @@ async function uploadMediaAction(
   token: string,
   wechatUin: string,
   toUserId: string,
-  action: IChannelMediaAction
+  action: IChannelMediaAction,
+  log?: (msg: string) => void
 ): Promise<UploadedWeixinMedia> {
   const fileData = fs.readFileSync(action.path);
   if (fileData.length > UPLOADS_MAX_BYTES) {
@@ -306,8 +387,8 @@ async function uploadMediaAction(
   const aesKey = crypto.randomBytes(16);
   const aesKeyHex = aesKey.toString('hex');
   const fileKey = crypto.randomBytes(16).toString('hex');
-  const uploadParam = await callGetUploadUrl(baseUrl, token, wechatUin, toUserId, action, fileData, aesKeyHex, fileKey);
-  const uploaded = await uploadBufferToCdn(fileData, uploadParam, fileKey, aesKey);
+  const upload = await callGetUploadUrl(baseUrl, token, wechatUin, toUserId, action, fileData, aesKeyHex, fileKey, log);
+  const uploaded = await uploadBufferToCdn(fileData, upload, fileKey, aesKey, log);
 
   return {
     itemType: getWeixinSendItemType(action),
@@ -601,7 +682,7 @@ async function runMonitor(
         for (const mediaAction of response.mediaActions ?? []) {
           try {
             // oxlint-disable-next-line eslint/no-await-in-loop
-            const uploaded = await uploadMediaAction(baseUrl, token, wechatUin, conversationId, mediaAction);
+            const uploaded = await uploadMediaAction(baseUrl, token, wechatUin, conversationId, mediaAction, log);
             // oxlint-disable-next-line eslint/no-await-in-loop
             await callSendMediaMessage(baseUrl, token, wechatUin, conversationId, uploaded, msg.context_token);
             if (mediaAction.caption) {
