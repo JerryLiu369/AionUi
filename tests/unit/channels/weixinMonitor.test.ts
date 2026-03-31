@@ -185,12 +185,13 @@ describe('WeixinMonitor — text message delivery', () => {
         if ((url as string).includes('getuploadurl')) {
           return {
             ok: true,
-            json: async () => ({ upload_param: 'upload-token' }),
+            json: async () => ({ upload_full_url: 'https://novac2c.cdn.weixin.qq.com/c2c/upload/direct-token' }),
           } as Response;
         }
-        if ((url as string).includes('/upload?')) {
+        if ((url as string).includes('novac2c.cdn.weixin.qq.com/c2c/upload')) {
           return {
             ok: true,
+            status: 200,
             headers: {
               get: (key: string) => (key === 'x-encrypted-param' ? 'download-token' : null),
             },
@@ -214,12 +215,12 @@ describe('WeixinMonitor — text message delivery', () => {
     });
     expect(sendBodies).toHaveLength(3);
 
-    const mediaBody = sendBodies[0] as { msg: { item_list: Array<{ type: number; image_item?: unknown }> } };
+    const captionBody = sendBodies[0] as { msg: { item_list: Array<{ text_item: { text: string } }> } };
+    expect(captionBody.msg.item_list[0]?.text_item.text).toBe('Chart ready');
+
+    const mediaBody = sendBodies[1] as { msg: { item_list: Array<{ type: number; image_item?: unknown }> } };
     expect(mediaBody.msg.item_list[0]?.type).toBe(2);
     expect(mediaBody.msg.item_list[0]?.image_item).toBeDefined();
-
-    const captionBody = sendBodies[1] as { msg: { item_list: Array<{ text_item: { text: string } }> } };
-    expect(captionBody.msg.item_list[0]?.text_item.text).toBe('Chart ready');
 
     const textBody = sendBodies[2] as { msg: { item_list: Array<{ text_item: { text: string } }> } };
     expect(textBody.msg.item_list[0]?.text_item.text).toBe('All done');

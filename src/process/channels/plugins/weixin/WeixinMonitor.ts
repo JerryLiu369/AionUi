@@ -681,14 +681,15 @@ async function runMonitor(
         const fallbackNotices: string[] = [];
         for (const mediaAction of response.mediaActions ?? []) {
           try {
+            if (mediaAction.caption) {
+              // Match openclaw-weixin ordering: send caption text before media item.
+              // oxlint-disable-next-line eslint/no-await-in-loop
+              await callSendMessage(baseUrl, token, wechatUin, conversationId, mediaAction.caption, msg.context_token);
+            }
             // oxlint-disable-next-line eslint/no-await-in-loop
             const uploaded = await uploadMediaAction(baseUrl, token, wechatUin, conversationId, mediaAction, log);
             // oxlint-disable-next-line eslint/no-await-in-loop
             await callSendMediaMessage(baseUrl, token, wechatUin, conversationId, uploaded, msg.context_token);
-            if (mediaAction.caption) {
-              // oxlint-disable-next-line eslint/no-await-in-loop
-              await callSendMessage(baseUrl, token, wechatUin, conversationId, mediaAction.caption, msg.context_token);
-            }
           } catch (sendErr) {
             const failedName = mediaAction.fileName || path.basename(mediaAction.path);
             fallbackNotices.push(`Failed to send ${failedName}`);
