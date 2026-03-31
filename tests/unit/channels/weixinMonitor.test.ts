@@ -152,6 +152,79 @@ describe('WeixinMonitor — text message delivery', () => {
     expect(agentChat).not.toHaveBeenCalled();
   });
 
+  it('uploads and sends media actions returned by agent.chat before trailing text', async () => {
+    const agentChat = vi.fn().mockResolvedValue({
+      text: 'All done',
+      mediaActions: [{ type: 'image', path: path.join(TEST_DIR, 'chart.png'), caption: 'Chart ready' }],
+    });
+    fs.writeFileSync(path.join(TEST_DIR, 'chart.png'), Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d]));
+
+    const sendBodies: unknown[] = [];
+    const controller = new AbortController();
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation(async (url: string, init: { body?: string }) => {
+        if ((url as string).includes('getupdates')) {
+          controller.abort();
+          return {
+            ok: true,
+            json: async () => ({
+              ret: 0,
+              msgs: [
+                {
+                  from_user_id: 'user_media_send',
+                  context_token: 'ctx_media_send',
+                  item_list: [{ type: 1, text_item: { text: 'send it' } }],
+                },
+              ],
+              get_updates_buf: '',
+            }),
+          } as Response;
+        }
+        if ((url as string).includes('getuploadurl')) {
+          return {
+            ok: true,
+            json: async () => ({ upload_param: 'upload-token' }),
+          } as Response;
+        }
+        if ((url as string).includes('/upload?')) {
+          return {
+            ok: true,
+            headers: {
+              get: (key: string) => (key === 'x-encrypted-param' ? 'download-token' : null),
+            },
+          } as Response;
+        }
+        if ((url as string).includes('sendmessage')) {
+          if (init?.body) sendBodies.push(JSON.parse(init.body));
+          return { ok: true, json: async () => ({}) } as Response;
+        }
+        return { ok: true, json: async () => ({}) } as Response;
+      })
+    );
+
+    startMonitor(makeOpts({ agent: { chat: agentChat }, abortSignal: controller.signal }));
+    await new Promise((r) => setTimeout(r, 80));
+
+    expect(agentChat).toHaveBeenCalledWith({
+      conversationId: 'user_media_send',
+      text: 'send it',
+      attachments: undefined,
+    });
+    expect(sendBodies).toHaveLength(3);
+
+    const mediaBody = sendBodies[0] as { msg: { item_list: Array<{ type: number; image_item?: unknown }> } };
+    expect(mediaBody.msg.item_list[0]?.type).toBe(2);
+    expect(mediaBody.msg.item_list[0]?.image_item).toBeDefined();
+
+    const captionBody = sendBodies[1] as { msg: { item_list: Array<{ text_item: { text: string } }> } };
+    expect(captionBody.msg.item_list[0]?.text_item.text).toBe('Chart ready');
+
+    const textBody = sendBodies[2] as { msg: { item_list: Array<{ text_item: { text: string } }> } };
+    expect(textBody.msg.item_list[0]?.text_item.text).toBe('All done');
+  });
+
   it('downloads media attachments, saves them locally, and passes them to agent.chat', async () => {
     const agentChat = vi.fn().mockResolvedValue({ text: 'Received attachments' });
     let sentBody: unknown;
