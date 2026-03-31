@@ -387,7 +387,7 @@ async function uploadMediaAction(
   if (fileStats.size > UPLOADS_MAX_BYTES) {
     throw new Error(`file too large: ${fileStats.size}`);
   }
-  const fileData = fs.readFileSync(action.path);
+  const fileData = await fs.promises.readFile(action.path);
 
   const aesKey = crypto.randomBytes(16);
   const aesKeyHex = aesKey.toString('hex');

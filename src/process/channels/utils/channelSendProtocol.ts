@@ -106,7 +106,7 @@ export async function resolveChannelSendProtocol(
       const canonicalPath = realpathSync(resolvedPath);
       if (!isPathInsideWorkspace(canonicalPath, workspaceRoot)) continue;
 
-      const stats = pathInfo.isSymbolicLink() ? statSync(canonicalPath) : statSync(resolvedPath);
+      const stats = pathInfo.isSymbolicLink() ? statSync(canonicalPath) : pathInfo;
       if (!stats.isFile() || stats.size > MAX_MEDIA_BYTES) continue;
 
       mediaActions.push({
