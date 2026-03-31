@@ -1,9 +1,8 @@
 ---
 name: weixin-file-send
 description: |
-  Emit a strict channel-send protocol block when the current channel conversation
-  should send a locally generated image or file back to the user. Use only when the file
-  already exists on disk and should be delivered to the current chat.
+  Use when the user wants a local file or image sent back, such as "send me the file"
+  or "发给我".
 ---
 
 # Weixin File Send
