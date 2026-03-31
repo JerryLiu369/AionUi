@@ -1,19 +1,26 @@
 ---
 name: weixin-file-send
 description: |
-  Emit a strict channel-send protocol block when the current Weixin channel conversation
+  Emit a strict channel-send protocol block when the current channel conversation
   should send a locally generated image or file back to the user. Use only when the file
   already exists on disk and should be delivered to the current chat.
 ---
 
 # Weixin File Send
 
-Use this skill only when:
+Use this skill when:
 
-- You are in a Weixin channel conversation.
-- A local file has already been created and should be sent back to the current chat.
+- The user asks you to send a file or image back, for example:
+  - "send me the file"
+  - "send the image over"
+  - "pass the file to me"
+  - "发给我"
+  - "图片发过来"
+  - "把文件传给我"
+- A local file already exists and should be delivered to the current chat.
 
 Do not claim a file was sent unless you emit the protocol block exactly.
+Without the protocol block, the app will not actually send the file.
 
 ## Protocol
 
@@ -38,9 +45,11 @@ Append one or more protocol blocks at the end of the final reply:
 - Use relative paths when the file is inside the workspace.
 - `fileName` is optional for `file`.
 - `caption` is optional.
+- If the user clearly wants the file or image sent back, prefer emitting the protocol block instead of only describing the file in text.
 - Place protocol blocks after the user-visible answer.
 - Do not wrap the JSON in Markdown code fences.
 - Do not emit the protocol block if the file does not exist.
+- Do not say the file was sent if you did not emit the protocol block.
 
 ## Examples
 
