@@ -226,6 +226,64 @@ describe('WeixinMonitor — text message delivery', () => {
     expect(textBody.msg.item_list[0]?.text_item.text).toBe('All done');
   });
 
+  it('checks file size before reading media actions into memory', async () => {
+    const mediaPath = path.join(TEST_DIR, 'too-large.bin');
+    const agentChat = vi.fn().mockResolvedValue({
+      text: 'Done',
+      mediaActions: [{ type: 'file', path: mediaPath, fileName: 'too-large.bin' }],
+    });
+    const fetchCalls: string[] = [];
+    const controller = new AbortController();
+
+    fs.writeFileSync(mediaPath, 'tiny');
+    const originalStatSync = fs.statSync;
+    const readSpy = vi.spyOn(fs, 'readFileSync');
+    const statSpy = vi.spyOn(fs, 'statSync');
+    statSpy.mockImplementation((targetPath, options) => {
+      if (targetPath === mediaPath) {
+        return {
+          isFile: () => true,
+          size: 201 * 1024 * 1024,
+        } as fs.Stats;
+      }
+      return originalStatSync(targetPath, options as { bigint?: false | undefined });
+    });
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation(async (url: string, init: { body?: string }) => {
+        fetchCalls.push(url);
+        if ((url as string).includes('getupdates')) {
+          controller.abort();
+          return {
+            ok: true,
+            json: async () => ({
+              ret: 0,
+              msgs: [
+                {
+                  from_user_id: 'user_large_media',
+                  context_token: 'ctx_large_media',
+                  item_list: [{ type: 1, text_item: { text: 'send the file' } }],
+                },
+              ],
+              get_updates_buf: '',
+            }),
+          } as Response;
+        }
+        if ((url as string).includes('sendmessage')) {
+          return { ok: true, json: async () => ({}) } as Response;
+        }
+        return { ok: true, json: async () => ({}) } as Response;
+      })
+    );
+
+    startMonitor(makeOpts({ agent: { chat: agentChat }, abortSignal: controller.signal }));
+    await new Promise((r) => setTimeout(r, 80));
+
+    expect(fetchCalls.some((url) => url.includes('getuploadurl'))).toBe(false);
+    expect(readSpy.mock.calls.some((call) => call[0] === mediaPath)).toBe(false);
+  });
+
   it('downloads media attachments, saves them locally, and passes them to agent.chat', async () => {
     const agentChat = vi.fn().mockResolvedValue({ text: 'Received attachments' });
     let sentBody: unknown;

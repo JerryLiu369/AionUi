@@ -6,7 +6,7 @@
 
 import type { IChannelMediaAction } from '../types';
 import path from 'path';
-import { existsSync, statSync } from 'fs';
+import { existsSync, lstatSync, realpathSync, statSync } from 'fs';
 import { getDatabase } from '@process/services/database';
 
 const CHANNEL_SEND_BLOCK_RE = /\[AIONUI_CHANNEL_SEND\]\s*([\s\S]*?)\s*\[\/AIONUI_CHANNEL_SEND\]/g;
@@ -81,32 +81,41 @@ export async function resolveChannelSendProtocol(
   const db = await getDatabase();
   const conversation = db.getConversation(conversationId);
   const workspace = conversation.success ? conversation.data?.extra?.workspace : undefined;
+  if (!workspace || !existsSync(workspace)) {
+    return { visibleText: extracted.visibleText, mediaActions: [] };
+  }
+
+  let workspaceRoot: string;
+  try {
+    workspaceRoot = realpathSync(workspace);
+  } catch {
+    return { visibleText: extracted.visibleText, mediaActions: [] };
+  }
 
   const mediaActions: IChannelMediaAction[] = [];
   for (const action of extracted.actions) {
     const resolvedPath = path.isAbsolute(action.path)
       ? path.resolve(action.path)
-      : workspace
-        ? path.resolve(workspace, action.path)
-        : '';
+      : path.resolve(workspaceRoot, action.path);
 
     if (!resolvedPath) continue;
-    if (workspace && !isPathInsideWorkspace(resolvedPath, workspace) && resolvedPath !== path.resolve(workspace)) {
-      continue;
-    }
     if (!existsSync(resolvedPath)) continue;
 
     try {
-      const stats = statSync(resolvedPath);
+      const pathInfo = lstatSync(resolvedPath);
+      const canonicalPath = realpathSync(resolvedPath);
+      if (!isPathInsideWorkspace(canonicalPath, workspaceRoot)) continue;
+
+      const stats = pathInfo.isSymbolicLink() ? statSync(canonicalPath) : statSync(resolvedPath);
       if (!stats.isFile() || stats.size > MAX_MEDIA_BYTES) continue;
+
+      mediaActions.push({
+        ...action,
+        path: canonicalPath,
+      });
     } catch {
       continue;
     }
-
-    mediaActions.push({
-      ...action,
-      path: resolvedPath,
-    });
   }
 
   return {

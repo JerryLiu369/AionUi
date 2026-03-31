@@ -8,6 +8,7 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 
+import i18n from '@process/services/i18n';
 import type { IChannelMediaAction } from '../../types';
 import { TypingManager } from './WeixinTyping';
 
@@ -379,10 +380,14 @@ async function uploadMediaAction(
   action: IChannelMediaAction,
   log?: (msg: string) => void
 ): Promise<UploadedWeixinMedia> {
-  const fileData = fs.readFileSync(action.path);
-  if (fileData.length > UPLOADS_MAX_BYTES) {
-    throw new Error(`file too large: ${fileData.length}`);
+  const fileStats = fs.statSync(action.path);
+  if (!fileStats.isFile()) {
+    throw new Error(`not a file: ${action.path}`);
   }
+  if (fileStats.size > UPLOADS_MAX_BYTES) {
+    throw new Error(`file too large: ${fileStats.size}`);
+  }
+  const fileData = fs.readFileSync(action.path);
 
   const aesKey = crypto.randomBytes(16);
   const aesKeyHex = aesKey.toString('hex');
@@ -692,7 +697,7 @@ async function runMonitor(
             await callSendMediaMessage(baseUrl, token, wechatUin, conversationId, uploaded, msg.context_token);
           } catch (sendErr) {
             const failedName = mediaAction.fileName || path.basename(mediaAction.path);
-            fallbackNotices.push(`Failed to send ${failedName}`);
+            fallbackNotices.push(i18n.t('settings.channels.mediaSendFailed', { name: failedName }));
             log(`[weixin] media send error for ${conversationId}: ${formatError(sendErr)}`);
           }
         }
