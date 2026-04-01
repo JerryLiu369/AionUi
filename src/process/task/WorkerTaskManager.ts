@@ -10,6 +10,7 @@ import type { IWorkerTaskManager } from './IWorkerTaskManager';
 import type { BuildConversationOptions, AgentType } from './agentTypes';
 import type { IConversationRepository } from '@process/services/database/IConversationRepository';
 import type { TChatConversation } from '@/common/config/storage';
+import { cronBusyGuard } from '@process/services/cron/CronBusyGuard';
 
 /** CLI-backed agents (acp, codex) idle for longer than this are killed to reclaim memory. */
 const AGENT_IDLE_TIMEOUT_MS = 30 * 60 * 1000;
@@ -24,16 +25,16 @@ export class WorkerTaskManager implements IWorkerTaskManager {
     private readonly factory: IAgentFactory,
     private readonly repo: IConversationRepository
   ) {
-    this.idleCheckTimer = setInterval(() => this.killIdleAcpTasks(), AGENT_IDLE_CHECK_INTERVAL_MS);
+    this.idleCheckTimer = setInterval(() => this.killIdleCliAgents(), AGENT_IDLE_CHECK_INTERVAL_MS);
   }
 
-  private killIdleAcpTasks(): void {
+  private killIdleCliAgents(): void {
     const now = Date.now();
     const idleIds = this.taskList
       .filter(
         (item) =>
           (item.task.type === 'acp' || item.task.type === 'codex') &&
-          item.task.status !== 'running' &&
+          !cronBusyGuard.isProcessing(item.id) &&
           now - item.task.lastActivityAt > AGENT_IDLE_TIMEOUT_MS
       )
       .map((item) => item.id);
