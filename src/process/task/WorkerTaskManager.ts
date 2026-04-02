@@ -5,7 +5,7 @@
  */
 
 import type { IAgentFactory } from './IAgentFactory';
-import type { IAgentManager } from './IAgentManager';
+import type { AgentKillReason, IAgentManager } from './IAgentManager';
 import type { IWorkerTaskManager } from './IWorkerTaskManager';
 import type { BuildConversationOptions, AgentType } from './agentTypes';
 import type { IConversationRepository } from '@process/services/database/IConversationRepository';
@@ -30,16 +30,15 @@ export class WorkerTaskManager implements IWorkerTaskManager {
 
   private killIdleCliAgents(): void {
     const now = Date.now();
-    const idleIds = this.taskList
+    const idleTasks = this.taskList
       .filter(
         (item) =>
           (item.task.type === 'acp' || item.task.type === 'codex') &&
           !cronBusyGuard.isProcessing(item.id) &&
           now - item.task.lastActivityAt > AGENT_IDLE_TIMEOUT_MS
-      )
-      .map((item) => item.id);
-    for (const id of idleIds) {
-      this.kill(id);
+      );
+    for (const item of idleTasks) {
+      this.kill(item.id, 'idle_timeout');
     }
   }
 
@@ -76,10 +75,10 @@ export class WorkerTaskManager implements IWorkerTaskManager {
     }
   }
 
-  kill(id: string): void {
+  kill(id: string, reason?: AgentKillReason): void {
     const index = this.taskList.findIndex((item) => item.id === id);
     if (index === -1) return;
-    this.taskList[index]?.task.kill();
+    this.taskList[index]?.task.kill(reason);
     this.taskList.splice(index, 1);
   }
 

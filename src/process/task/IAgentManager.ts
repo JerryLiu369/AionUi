@@ -9,6 +9,8 @@
 import type { IConfirmation } from '@/common/chat/chatLib';
 import type { AgentType, AgentStatus } from './agentTypes';
 
+export type AgentKillReason = 'idle_timeout';
+
 export interface IAgentManager {
   readonly type: AgentType;
   /**
@@ -24,5 +26,5 @@ export interface IAgentManager {
   stop(): Promise<void>;
   confirm(msgId: string, callId: string, data: unknown): void;
   getConfirmations(): IConfirmation[];
-  kill(): void;
+  kill(reason?: AgentKillReason): void;
 }
