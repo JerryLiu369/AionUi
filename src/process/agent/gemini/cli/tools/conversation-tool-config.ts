@@ -8,6 +8,7 @@ import type { TProviderWithModel } from '@/common/config/storage';
 import { uuid } from '@/common/utils';
 import type { GeminiClient } from '@office-ai/aioncli-core';
 import { AuthType, Config } from '@office-ai/aioncli-core';
+import os from 'os';
 import { WebFetchTool } from './web-fetch';
 import { WebSearchTool } from './web-search';
 
@@ -96,8 +97,8 @@ export class ConversationToolConfig {
     // 创建一个最小化的配置，只用于Gemini WebSearch
     return new Config({
       sessionId: 'gemini-websearch-' + Date.now(),
-      targetDir: process.cwd(),
-      cwd: process.cwd(),
+      targetDir: os.tmpdir(),
+      cwd: os.tmpdir(),
       debugMode: false,
       question: '',
       // fullContext 参数在 aioncli-core v0.18.4 中已移除
