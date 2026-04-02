@@ -2,7 +2,6 @@ import { fork as cpFork, type ChildProcess } from 'child_process';
 import { readFileSync } from 'fs';
 import os from 'os';
 import path from 'path';
-import { fileURLToPath } from 'url';
 import type { IPlatformServices, IWorkerProcess } from './IPlatformServices';
 
 class NodeWorkerProcess implements IWorkerProcess {
@@ -22,21 +21,10 @@ class NodeWorkerProcess implements IWorkerProcess {
   }
 }
 
-// Derive the app root from this module's location so it is independent of
-// the process working directory. In the bundled server (dist-server/server.mjs)
-// import.meta.url points to the bundle file, so one level up is the app root.
-const _appRoot = (() => {
-  try {
-    return path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-  } catch {
-    return process.cwd();
-  }
-})();
-
 // Read name + version from package.json once at module load.
 const _pkg = (() => {
   try {
-    return JSON.parse(readFileSync(path.join(_appRoot, 'package.json'), 'utf8')) as {
+    return JSON.parse(readFileSync(path.join(process.cwd(), 'package.json'), 'utf8')) as {
       name?: string;
       version?: string;
     };
@@ -51,7 +39,7 @@ export class NodePlatformServices implements IPlatformServices {
     getTempDir: () => os.tmpdir(),
     getHomeDir: () => os.homedir(),
     getLogsDir: () => process.env.LOGS_DIR ?? path.join(os.homedir(), '.aionui-server', 'logs'),
-    getAppPath: (): string | null => _appRoot,
+    getAppPath: (): string | null => process.cwd(),
     isPackaged: () => process.env.IS_PACKAGED === 'true',
     getSystemPath: (_name: 'desktop' | 'home' | 'downloads'): string | null => null,
     getName: () => _pkg.name ?? 'aionui',
