@@ -30,9 +30,11 @@ const WorkspaceOpenButton: React.FC<WorkspaceOpenButtonProps> = ({ workspacePath
   const [vscodeInstalled, setVscodeInstalled] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [preferredTool, setPreferredTool] = useState<ToolType | null>(null);
+  const isTemporary = isTemporaryWorkspace(workspacePath);
 
   // Check if VS Code is installed and load preferred tool
   useEffect(() => {
+    if (isTemporary) return;
     const checkTools = async () => {
       try {
         const installed = await ipcBridge.shell.checkToolInstalled.invoke({ tool: 'vscode' });
@@ -50,12 +52,7 @@ const WorkspaceOpenButton: React.FC<WorkspaceOpenButtonProps> = ({ workspacePath
     }
 
     void checkTools();
-  }, []);
-
-  // Don't render if workspace is temporary
-  if (isTemporaryWorkspace(workspacePath)) {
-    return null;
-  }
+  }, [isTemporary]);
 
   const handleOpenWith = async (tool: ToolType) => {
     try {
@@ -68,6 +65,9 @@ const WorkspaceOpenButton: React.FC<WorkspaceOpenButtonProps> = ({ workspacePath
     }
     setDropdownOpen(false);
   };
+
+  // Don't render if workspace is temporary
+  if (isTemporary) return null;
 
   // Build dropdown options
   const toolOptions: ToolOption[] = [
