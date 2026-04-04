@@ -73,6 +73,9 @@ export function getPlatformServices(): IPlatformServices {
           },
           power: { preventSleep: () => null, allowSleep: () => {}, preventDisplaySleep: () => null },
           notification: { send: () => {} },
+          network: {
+            fetch: (input: string | URL | Request, init?: RequestInit): Promise<Response> => net.fetch(input, init),
+          },
         };
       }
     } else {
@@ -91,4 +94,5 @@ export type {
   IWorkerProcessFactory,
   IPowerManager,
   INotificationService,
+  INetworkService,
 } from './IPlatformServices';

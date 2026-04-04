@@ -1,3 +1,4 @@
+import { getPlatformServices } from '@/common/platform';
 import { getDataPath } from '@process/utils';
 import { acpDetector } from '@process/agent/acp/AcpDetector';
 import { exec } from 'child_process';
@@ -258,7 +259,7 @@ export class HubInstallerImpl {
   }
 
   private async downloadFile(url: string, dest: string): Promise<void> {
-    const response = await fetch(url);
+    const response = await getPlatformServices().network.fetch(url);
     if (!response.ok) {
       throw new Error(`Failed to fetch ${url}: ${response.statusText}`);
     }

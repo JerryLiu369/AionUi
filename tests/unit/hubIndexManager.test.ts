@@ -1,10 +1,18 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // ---------------------------------------------------------------------------
 // Mocks
 // ---------------------------------------------------------------------------
 
 const mockFetch = vi.fn();
+
+vi.mock('@/common/platform', () => ({
+  getPlatformServices: () => ({
+    network: {
+      fetch: (...args: unknown[]) => mockFetch(...args),
+    },
+  }),
+}));
 
 const mockExistsSync = vi.fn(() => false);
 const mockReadFileSync = vi.fn(() => '{}');
@@ -41,15 +49,10 @@ describe('HubIndexManager', () => {
     vi.clearAllMocks();
     mockExistsSync.mockReturnValue(false);
     mockFetch.mockRejectedValue(new Error('no network'));
-    vi.stubGlobal('fetch', mockFetch);
     // Reset singleton state so each test starts fresh
     (hubIndexManager as any)['mergedIndex'] = {};
     (hubIndexManager as any)['localLoaded'] = false;
     (hubIndexManager as any)['remoteLoaded'] = false;
-  });
-
-  afterEach(() => {
-    vi.unstubAllGlobals();
   });
 
   describe('loadIndexes', () => {
