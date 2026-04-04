@@ -1,16 +1,11 @@
 import path from 'node:path';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // ---------------------------------------------------------------------------
 // Mocks
 // ---------------------------------------------------------------------------
 
 const mockFetch = vi.fn();
-
-vi.mock('electron', () => ({
-  app: { isPackaged: false, getPath: vi.fn(() => '/tmp') },
-  net: { fetch: (...args: unknown[]) => mockFetch(...args) },
-}));
 
 vi.mock('fs', async () => {
   const actual = await vi.importActual<typeof import('fs')>('fs');
@@ -100,9 +95,14 @@ describe('HubInstaller', () => {
     vi.clearAllMocks();
     mockedExistsSync.mockReturnValue(false);
     mockFetch.mockRejectedValue(new Error('no network'));
+    vi.stubGlobal('fetch', mockFetch);
     mocks.getExtensionResult = undefined;
     mocks.setTransientCalls = [];
     mocks.detectedAgents = [];
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
   });
 
   describe('install', () => {

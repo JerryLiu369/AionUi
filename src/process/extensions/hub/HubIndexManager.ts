@@ -1,5 +1,4 @@
 import type { IHubExtension, IHubIndex } from '@/common/types/hub';
-import { net } from 'electron';
 import * as fs from 'fs';
 import * as path from 'path';
 import {
@@ -115,7 +114,7 @@ class HubIndexManagerImpl {
       try {
         console.log(`[HubIndexManager] Attempting to fetch remote index from: ${url}`);
 
-        const response = (await Promise.race([net.fetch(url), timeoutPromise])) as Response;
+        const response = (await Promise.race([fetch(url), timeoutPromise])) as Response;
         if (!response.ok) throw new Error(`Status ${response.status}`);
         const data = (await response.json()) as IHubIndex;
 

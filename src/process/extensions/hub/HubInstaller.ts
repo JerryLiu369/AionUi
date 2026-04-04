@@ -2,7 +2,6 @@ import { getDataPath } from '@process/utils';
 import { acpDetector } from '@process/agent/acp/AcpDetector';
 import { exec } from 'child_process';
 import * as crypto from 'crypto';
-import { net } from 'electron';
 import * as fs from 'fs';
 import * as path from 'path';
 import { promisify } from 'util';
@@ -259,7 +258,7 @@ export class HubInstallerImpl {
   }
 
   private async downloadFile(url: string, dest: string): Promise<void> {
-    const response = await net.fetch(url);
+    const response = await fetch(url);
     if (!response.ok) {
       throw new Error(`Failed to fetch ${url}: ${response.statusText}`);
     }
