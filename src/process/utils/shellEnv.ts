@@ -32,7 +32,9 @@ const PERF_LOG = process.env.ACP_PERF === '1';
  * the bun executable. Returns null if the directory doesn't exist.
  */
 export function getBundledBunDir(): string | null {
-  const resourcesPath = getPlatformServices().paths.isPackaged() ? process.resourcesPath : path.join(process.cwd(), 'resources');
+  const resourcesPath = getPlatformServices().paths.isPackaged()
+    ? process.resourcesPath
+    : path.join(process.cwd(), 'resources');
   const platform = process.platform === 'win32' ? 'win32' : process.platform;
   const arch = process.arch;
   const bunDir = path.join(resourcesPath, 'bundled-bun', `${platform}-${arch}`);
