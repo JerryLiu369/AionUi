@@ -1,13 +1,12 @@
 import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('electron', () => ({
-  app: { isPackaged: false, getPath: vi.fn(() => '/tmp') },
-}));
-
 vi.mock('@/common/platform', () => ({
   getPlatformServices: () => ({
-    paths: { getDataDir: () => '/appdata' },
+    paths: {
+      getDataDir: () => '/appdata',
+      isPackaged: () => false,
+    },
   }),
 }));
 
