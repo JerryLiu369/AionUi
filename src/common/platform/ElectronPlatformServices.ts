@@ -67,6 +67,7 @@ export class ElectronPlatformServices implements IPlatformServices {
   };
 
   network = {
-    fetch: (input: string | URL | Request, init?: RequestInit): Promise<Response> => net.fetch(input, init),
+    fetch: (input: string | URL | Request, init?: RequestInit): Promise<Response> =>
+      net.fetch(input instanceof URL ? input.toString() : input, init),
   };
 }

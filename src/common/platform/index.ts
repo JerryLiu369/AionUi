@@ -35,7 +35,7 @@ export function getPlatformServices(): IPlatformServices {
         _services = new NodePlatformServices();
       } else {
         // eslint-disable-next-line @typescript-eslint/no-require-imports
-        const { app } = require('electron') as typeof import('electron');
+        const { app, net } = require('electron') as typeof import('electron');
         // Dev isolation: set app name before any getPath('userData') call.
         // Rollup may load this chunk before configureChromium.ts runs, so we
         // must apply the dev name here as a safety net.
@@ -74,7 +74,8 @@ export function getPlatformServices(): IPlatformServices {
           power: { preventSleep: () => null, allowSleep: () => {}, preventDisplaySleep: () => null },
           notification: { send: () => {} },
           network: {
-            fetch: (input: string | URL | Request, init?: RequestInit): Promise<Response> => net.fetch(input, init),
+            fetch: (input: string | URL | Request, init?: RequestInit): Promise<Response> =>
+              net.fetch(input instanceof URL ? input.toString() : input, init),
           },
         };
       }
