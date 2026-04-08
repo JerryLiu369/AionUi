@@ -208,9 +208,7 @@ describe('composeMessageWithIndex - text segment boundaries', () => {
       expect(messages).toHaveLength(3);
     });
 
-    const messages = JSON.parse(
-      screen.getByTestId('interleaved-messages').textContent ?? '[]'
-    ) as TestMessage[];
+    const messages = JSON.parse(screen.getByTestId('interleaved-messages').textContent ?? '[]') as TestMessage[];
     expect(messages[0].type).toBe('text');
     expect(messages[0].content.content).toBe('Hello ');
     expect(messages[1].type).toBe('acp_tool_call');
@@ -261,9 +259,7 @@ describe('composeMessageWithIndex - text segment boundaries', () => {
     fireEvent.click(screen.getByRole('button', { name: 'add-consecutive' }));
 
     await waitFor(() => {
-      const messages = JSON.parse(
-        screen.getByTestId('consecutive-messages').textContent ?? '[]'
-      ) as TestMessage[];
+      const messages = JSON.parse(screen.getByTestId('consecutive-messages').textContent ?? '[]') as TestMessage[];
       expect(messages).toHaveLength(1);
       expect(messages[0].content.content).toBe('Foo Bar');
     });
