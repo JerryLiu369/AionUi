@@ -146,3 +146,126 @@ describe('message hooks cache merge', () => {
     });
   });
 });
+
+const InterleavedProbe = () => {
+  const addOrUpdateMessage = useAddOrUpdateMessage();
+  const messages = useMessageList();
+
+  return (
+    <div>
+      <button
+        type='button'
+        onClick={() => {
+          addOrUpdateMessage({
+            id: 'text-1',
+            msg_id: 'text-A',
+            conversation_id: 'conv-1',
+            type: 'text',
+            position: 'left',
+            content: { content: 'Hello ' },
+          } as any);
+          addOrUpdateMessage({
+            id: 'tool-1',
+            msg_id: 'tool-1',
+            conversation_id: 'conv-1',
+            type: 'acp_tool_call',
+            position: 'left',
+            content: { update: { toolCallId: 'tc-1', status: 'executing' } },
+          } as any);
+          addOrUpdateMessage({
+            id: 'text-2',
+            msg_id: 'text-A',
+            conversation_id: 'conv-1',
+            type: 'text',
+            position: 'left',
+            content: { content: 'World' },
+          } as any);
+        }}
+      >
+        add-interleaved
+      </button>
+      <pre data-testid='interleaved-messages'>{JSON.stringify(messages)}</pre>
+    </div>
+  );
+};
+
+describe('composeMessageWithIndex - text segment boundaries', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('does not merge text chunks with same msg_id when a tool call appears between them', async () => {
+    render(
+      <MessageListProvider value={[]}>
+        <InterleavedProbe />
+      </MessageListProvider>
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'add-interleaved' }));
+
+    await waitFor(() => {
+      const messages = JSON.parse(screen.getByTestId('interleaved-messages').textContent ?? '[]') as TestMessage[];
+      expect(messages).toHaveLength(3);
+    });
+
+    const messages = JSON.parse(
+      screen.getByTestId('interleaved-messages').textContent ?? '[]'
+    ) as TestMessage[];
+    expect(messages[0].type).toBe('text');
+    expect(messages[0].content.content).toBe('Hello ');
+    expect(messages[1].type).toBe('acp_tool_call');
+    expect(messages[2].type).toBe('text');
+    expect(messages[2].content.content).toBe('World');
+  });
+
+  it('still merges consecutive text chunks with the same msg_id when no tool call is between them', async () => {
+    const ConsecutiveProbe = () => {
+      const addOrUpdate = useAddOrUpdateMessage();
+      const messages = useMessageList();
+      return (
+        <div>
+          <button
+            type='button'
+            onClick={() => {
+              addOrUpdate({
+                id: 'c1',
+                msg_id: 'text-B',
+                conversation_id: 'conv-1',
+                type: 'text',
+                position: 'left',
+                content: { content: 'Foo ' },
+              } as any);
+              addOrUpdate({
+                id: 'c2',
+                msg_id: 'text-B',
+                conversation_id: 'conv-1',
+                type: 'text',
+                position: 'left',
+                content: { content: 'Bar' },
+              } as any);
+            }}
+          >
+            add-consecutive
+          </button>
+          <pre data-testid='consecutive-messages'>{JSON.stringify(messages)}</pre>
+        </div>
+      );
+    };
+
+    render(
+      <MessageListProvider value={[]}>
+        <ConsecutiveProbe />
+      </MessageListProvider>
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'add-consecutive' }));
+
+    await waitFor(() => {
+      const messages = JSON.parse(
+        screen.getByTestId('consecutive-messages').textContent ?? '[]'
+      ) as TestMessage[];
+      expect(messages).toHaveLength(1);
+      expect(messages[0].content.content).toBe('Foo Bar');
+    });
+  });
+});
