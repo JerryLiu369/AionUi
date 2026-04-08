@@ -166,16 +166,24 @@ function composeMessageWithIndex(message: TMessage, list: TMessage[], index: Mes
         if ((message.content as { teammateMessage?: boolean })?.teammateMessage) {
           return list;
         }
-        // AI streaming messages (left position) — append chunks
-        const newList = list.slice();
-        newList[existingIdx] = {
-          ...existingMsg,
-          content: {
-            ...existingMsg.content,
-            content: existingMsg.content.content + message.content.content,
-          },
-        };
-        return newList;
+        // AI streaming messages (left position) — only merge if this text message is still
+        // the last item in the list. If a tool call was inserted after it, this chunk belongs
+        // to a new text segment and must be added separately.
+        if (existingIdx === list.length - 1) {
+          const newList = list.slice();
+          newList[existingIdx] = {
+            ...existingMsg,
+            content: {
+              ...existingMsg.content,
+              content: existingMsg.content.content + message.content.content,
+            },
+          };
+          return newList;
+        }
+        // A tool call was inserted after this text segment — start a new text message.
+        const newIdx = list.length;
+        index.msgIdIndex.set(message.msg_id, newIdx);
+        return list.concat(message);
       }
     }
     // Not found in index, add as new message
