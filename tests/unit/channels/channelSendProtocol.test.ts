@@ -8,6 +8,17 @@ const mockGetConversation = vi.fn();
 const TEST_DATA_ROOT = path.join(TEST_DIR, 'data-root');
 const TEST_CONFIG_ROOT = path.join(TEST_DIR, 'config-root');
 
+function buildChannelSendProtocol(action: {
+  type: 'image' | 'file';
+  path: string;
+  fileName?: string;
+  caption?: string;
+}): string {
+  return `[AIONUI_CHANNEL_SEND]
+${JSON.stringify(action)}
+[/AIONUI_CHANNEL_SEND]`;
+}
+
 vi.mock('@process/services/database', () => ({
   getDatabase: vi.fn(async () => ({
     getConversation: mockGetConversation,
@@ -39,9 +50,7 @@ describe('channelSendProtocol', () => {
     mockGetConversation.mockReturnValue({ success: false });
 
     const parsed = await resolveChannelSendProtocol(
-      `[AIONUI_CHANNEL_SEND]
-{"type":"file","path":"${externalFile}"}
-[/AIONUI_CHANNEL_SEND]`,
+      buildChannelSendProtocol({ type: 'file', path: externalFile }),
       'conv-missing-workspace'
     );
 
@@ -67,9 +76,7 @@ describe('channelSendProtocol', () => {
     mockGetConversation.mockReturnValue({ success: true, data: { extra: { workspace } } });
 
     const parsed = await resolveChannelSendProtocol(
-      `[AIONUI_CHANNEL_SEND]
-{"type":"file","path":"./leak.txt"}
-[/AIONUI_CHANNEL_SEND]`,
+      buildChannelSendProtocol({ type: 'file', path: './leak.txt' }),
       'conv-workspace'
     );
 
@@ -93,18 +100,21 @@ describe('channelSendProtocol', () => {
     fs.mkdirSync(workspace, { recursive: true });
     fs.writeFileSync(sharedFile, 'report');
     mockGetConversation.mockReturnValue({ success: true, data: { extra: { workspace } } });
+    const canonicalSharedFile = fs.realpathSync(sharedFile);
 
     const parsed = await resolveChannelSendProtocol(
-      `[AIONUI_CHANNEL_SEND]
-{"type":"file","path":"../claude-temp-200/uploads/report.pdf","fileName":"report.pdf"}
-[/AIONUI_CHANNEL_SEND]`,
+      buildChannelSendProtocol({
+        type: 'file',
+        path: '../claude-temp-200/uploads/report.pdf',
+        fileName: 'report.pdf',
+      }),
       'conv-sibling-temp'
     );
 
     expect(parsed.mediaActions).toEqual([
       {
         type: 'file',
-        path: sharedFile,
+        path: canonicalSharedFile,
         fileName: 'report.pdf',
       },
     ]);
@@ -119,18 +129,17 @@ describe('channelSendProtocol', () => {
     fs.mkdirSync(workspace, { recursive: true });
     fs.writeFileSync(tempFile, 'image-bytes');
     mockGetConversation.mockReturnValue({ success: true, data: { extra: { workspace } } });
+    const canonicalTempFile = fs.realpathSync(tempFile);
 
     const parsed = await resolveChannelSendProtocol(
-      `[AIONUI_CHANNEL_SEND]
-{"type":"image","path":"${tempFile}"}
-[/AIONUI_CHANNEL_SEND]`,
+      buildChannelSendProtocol({ type: 'image', path: tempFile }),
       'conv-config-temp'
     );
 
     expect(parsed.mediaActions).toEqual([
       {
         type: 'image',
-        path: tempFile,
+        path: canonicalTempFile,
       },
     ]);
     expect(parsed.rejectedActions).toEqual([]);
@@ -146,9 +155,11 @@ describe('channelSendProtocol', () => {
     mockGetConversation.mockReturnValue({ success: true, data: { extra: { workspace } } });
 
     const parsed = await resolveChannelSendProtocol(
-      `[AIONUI_CHANNEL_SEND]
-{"type":"file","path":"../aionui.db","fileName":"aionui.db"}
-[/AIONUI_CHANNEL_SEND]`,
+      buildChannelSendProtocol({
+        type: 'file',
+        path: '../aionui.db',
+        fileName: 'aionui.db',
+      }),
       'conv-reject-data-root-file'
     );
 
