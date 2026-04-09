@@ -26,9 +26,17 @@ class BaseAgentManager<Data, ConfirmationOption extends any = any>
   conversation_id: string = '';
   protected confirmations: Array<IConfirmation<ConfirmationOption>> = [];
   status: AgentStatus | undefined;
+  protected _isTurnInProgress = false;
+  get isTurnInProgress(): boolean {
+    return this._isTurnInProgress;
+  }
   protected _lastActivityAt: number = Date.now();
   get lastActivityAt(): number {
     return this._lastActivityAt;
+  }
+  protected _lastResponseAt: number = 0;
+  get lastResponseAt(): number {
+    return this._lastResponseAt;
   }
 
   /**
@@ -117,6 +125,22 @@ class BaseAgentManager<Data, ConfirmationOption extends any = any>
   sendMessage(data: any) {
     this._lastActivityAt = Date.now();
     return this.postMessagePromise('send.message', data);
+  }
+
+  protected markTurnStarted(): void {
+    this._isTurnInProgress = true;
+  }
+
+  protected markTurnFinished(): void {
+    this._isTurnInProgress = false;
+  }
+
+  /**
+   * Record the latest agent-originated response activity observed by the manager.
+   * This is intentionally separate from lastActivityAt, which tracks send start time.
+   */
+  protected markResponseActivity(at = Date.now()): void {
+    this._lastResponseAt = at;
   }
 
   /**

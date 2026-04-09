@@ -66,6 +66,7 @@ vi.mock('@process/task/BaseAgentManager', () => ({
   default: class {
     conversation_id = '';
     status: string | undefined;
+    isTurnInProgress = false;
     workspace = '';
     bootstrapping = false;
     yoloMode = false;
@@ -75,6 +76,12 @@ vi.mock('@process/task/BaseAgentManager', () => ({
     }
     isYoloMode() {
       return false;
+    }
+    markTurnStarted() {
+      this.isTurnInProgress = true;
+    }
+    markTurnFinished() {
+      this.isTurnInProgress = false;
     }
     addConfirmation() {}
   },
@@ -146,6 +153,7 @@ describe('AcpAgentManager.sendMessage — real class cronBusyGuard cleanup', () 
     await manager.sendMessage({ content: 'hello', msg_id: 'msg-1' });
 
     expect(manager.status).toBe('finished');
+    expect((manager as unknown as { isTurnInProgress: boolean }).isTurnInProgress).toBe(false);
   });
 
   it('does NOT call setProcessing(false) when first-path returns {success:true}', async () => {
@@ -156,6 +164,7 @@ describe('AcpAgentManager.sendMessage — real class cronBusyGuard cleanup', () 
 
     expect(mockSetProcessing).toHaveBeenCalledWith('conv-3', true);
     expect(mockSetProcessing).not.toHaveBeenCalledWith('conv-3', false);
+    expect((manager as unknown as { isTurnInProgress: boolean }).isTurnInProgress).toBe(true);
   });
 
   // ── Subsequent-message path (lines 657-660 in AcpAgentManager.ts) ─────────
@@ -179,6 +188,7 @@ describe('AcpAgentManager.sendMessage — real class cronBusyGuard cleanup', () 
     await manager.sendMessage({ content: 'hello' });
 
     expect(manager.status).toBe('finished');
+    expect((manager as unknown as { isTurnInProgress: boolean }).isTurnInProgress).toBe(false);
   });
 
   it('does NOT call setProcessing(false) when second-path returns {success:true}', async () => {
@@ -189,6 +199,7 @@ describe('AcpAgentManager.sendMessage — real class cronBusyGuard cleanup', () 
 
     expect(mockSetProcessing).toHaveBeenCalledWith('conv-6', true);
     expect(mockSetProcessing).not.toHaveBeenCalledWith('conv-6', false);
+    expect((manager as unknown as { isTurnInProgress: boolean }).isTurnInProgress).toBe(true);
   });
 
   // ── Thrown-exception path (catch block) ───────────────────────────────────
@@ -210,6 +221,7 @@ describe('AcpAgentManager.sendMessage — real class cronBusyGuard cleanup', () 
     await expect(manager.sendMessage({ content: 'hello' })).rejects.toThrow();
 
     expect(manager.status).toBe('finished');
+    expect((manager as unknown as { isTurnInProgress: boolean }).isTurnInProgress).toBe(false);
   });
 
   // ── Guard is cleared before next invocation ───────────────────────────────

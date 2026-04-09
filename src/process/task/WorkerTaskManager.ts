@@ -10,7 +10,6 @@ import type { IWorkerTaskManager } from './IWorkerTaskManager';
 import type { BuildConversationOptions, AgentType } from './agentTypes';
 import type { IConversationRepository } from '@process/services/database/IConversationRepository';
 import type { TChatConversation } from '@/common/config/storage';
-import { cronBusyGuard } from '@process/services/cron/CronBusyGuard';
 import { ProcessConfig } from '@process/utils/initStorage';
 import { mainLog } from '@process/utils/mainLogger';
 
@@ -39,22 +38,34 @@ export class WorkerTaskManager implements IWorkerTaskManager {
     return Math.max(MIN_AGENT_IDLE_TIMEOUT_SECONDS, configuredSeconds) * 1000;
   }
 
+  /**
+   * ACP idle cleanup should honor both user-send time and the most recent
+   * agent-originated response event. This prevents active streaming/tool turns
+   * from being reaped based solely on an old send start timestamp.
+   */
+  private getLastAgentActivityAt(task: IAgentManager): number {
+    return Math.max(task.lastActivityAt, task.lastResponseAt);
+  }
+
   private killIdleCliAgents(): void {
     const now = Date.now();
     const idleTimeoutMs = this.getAgentIdleTimeoutMs();
     const idleTasks = this.taskList.filter(
       (item) =>
         item.task.type === 'acp' &&
-        !cronBusyGuard.isProcessing(item.id) &&
-        now - item.task.lastActivityAt > idleTimeoutMs
+        !item.task.isTurnInProgress &&
+        now - this.getLastAgentActivityAt(item.task) > idleTimeoutMs
     );
     for (const item of idleTasks) {
+      const lastAgentActivityAt = this.getLastAgentActivityAt(item.task);
       mainLog('[WorkerTaskManager]', 'Killing idle ACP agent', {
         conversationId: item.id,
         type: item.task.type,
         reason: 'idle_timeout',
-        idleForMs: now - item.task.lastActivityAt,
+        idleForMs: now - lastAgentActivityAt,
         lastActivityAt: new Date(item.task.lastActivityAt).toISOString(),
+        ...(item.task.lastResponseAt > 0 ? { lastResponseAt: new Date(item.task.lastResponseAt).toISOString() } : {}),
+        lastAgentActivityAt: new Date(lastAgentActivityAt).toISOString(),
       });
       this.kill(item.id, 'idle_timeout');
     }

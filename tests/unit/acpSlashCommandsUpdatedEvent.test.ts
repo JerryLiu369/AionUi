@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 // Hoist mocks that are referenced inside vi.mock factories
 const { mockEmit, capturedCallbacks } = vi.hoisted(() => ({
@@ -7,6 +7,8 @@ const { mockEmit, capturedCallbacks } = vi.hoisted(() => ({
     onAvailableCommandsUpdate: null as
       | ((commands: Array<{ name: string; description?: string; hint?: string }>) => void)
       | null,
+    onStreamEvent: null as ((message: Record<string, unknown>) => void) | null,
+    onSignalEvent: null as ((message: Record<string, unknown>) => void) | null,
   },
 }));
 
@@ -84,13 +86,17 @@ vi.mock('@/common/utils', () => ({
   uuid: vi.fn(() => 'mock-uuid'),
 }));
 
+vi.mock('@/common/chat/chatLib', () => ({
+  transformMessage: vi.fn(() => null),
+}));
+
 vi.mock('@process/task/MessageMiddleware', () => ({
   extractTextFromMessage: vi.fn(),
   processCronInMessage: vi.fn(),
 }));
 
 vi.mock('@process/task/ThinkTagDetector', () => ({
-  stripThinkTags: vi.fn((s: string) => s),
+  extractAndStripThinkTags: vi.fn((s: string) => ({ thinking: '', content: s })),
 }));
 
 vi.mock('@process/task/CronCommandDetector', () => ({
@@ -112,6 +118,8 @@ vi.mock('@process/agent/acp', () => {
   const MockAcpAgent = vi.fn(function (this: Record<string, unknown>, config: Record<string, unknown>) {
     capturedCallbacks.onAvailableCommandsUpdate =
       config.onAvailableCommandsUpdate as typeof capturedCallbacks.onAvailableCommandsUpdate;
+    capturedCallbacks.onStreamEvent = config.onStreamEvent as typeof capturedCallbacks.onStreamEvent;
+    capturedCallbacks.onSignalEvent = config.onSignalEvent as typeof capturedCallbacks.onSignalEvent;
     this.sendMessage = vi.fn(async () => ({ success: true }));
     this.getModelInfo = vi.fn(() => null);
     this.getSessionState = vi.fn(() => null);
@@ -124,6 +132,9 @@ vi.mock('@process/agent/acp', () => {
 });
 
 import AcpAgentManager from '@process/task/AcpAgentManager';
+import { cronBusyGuard } from '@process/services/cron/CronBusyGuard';
+import { hasCronCommands } from '@process/task/CronCommandDetector';
+import { processCronInMessage } from '@process/task/MessageMiddleware';
 
 function createManager(): InstanceType<typeof AcpAgentManager> {
   const data = {
@@ -139,6 +150,12 @@ describe('AcpAgentManager — slash_commands_updated event', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     capturedCallbacks.onAvailableCommandsUpdate = null;
+    capturedCallbacks.onStreamEvent = null;
+    capturedCallbacks.onSignalEvent = null;
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it('emits slash_commands_updated when onAvailableCommandsUpdate fires', async () => {
@@ -221,5 +238,92 @@ describe('AcpAgentManager — slash_commands_updated event', () => {
     const commands = manager.getAcpSlashCommands();
     expect(commands).toHaveLength(1);
     expect(commands[0].name).toBe('valid');
+  });
+
+  it('refreshes lastResponseAt when ACP emits a stream event after bootstrap', async () => {
+    vi.useFakeTimers();
+    const manager = createManager();
+    await manager.initAgent();
+
+    await vi.waitFor(() => {
+      expect(capturedCallbacks.onStreamEvent).not.toBeNull();
+    });
+
+    vi.setSystemTime(new Date('2026-04-09T04:10:11Z'));
+    capturedCallbacks.onStreamEvent!({
+      type: 'content',
+      conversation_id: 'test-conv',
+      msg_id: 'stream-1',
+      data: 'hello',
+    });
+
+    expect(manager.lastResponseAt).toBe(Date.parse('2026-04-09T04:10:11Z'));
+  });
+
+  it('refreshes lastResponseAt when ACP emits a signal event after bootstrap', async () => {
+    vi.useFakeTimers();
+    const manager = createManager();
+    await manager.initAgent();
+
+    await vi.waitFor(() => {
+      expect(capturedCallbacks.onSignalEvent).not.toBeNull();
+    });
+
+    vi.setSystemTime(new Date('2026-04-09T04:20:21Z'));
+    capturedCallbacks.onSignalEvent!({
+      type: 'finish',
+      conversation_id: 'test-conv',
+      msg_id: 'finish-1',
+      data: null,
+    });
+
+    expect(manager.lastResponseAt).toBe(Date.parse('2026-04-09T04:20:21Z'));
+  });
+
+  it('keeps the turn alive across cron follow-up continuation', async () => {
+    vi.useFakeTimers();
+    const manager = createManager();
+    await manager.initAgent();
+
+    await vi.waitFor(() => {
+      expect(capturedCallbacks.onSignalEvent).not.toBeNull();
+    });
+
+    const mockHasCronCommands = vi.mocked(hasCronCommands);
+    const mockProcessCronInMessage = vi.mocked(processCronInMessage);
+    const mockSetProcessing = vi.mocked(cronBusyGuard.setProcessing);
+    mockHasCronCommands.mockReturnValue(true);
+    mockProcessCronInMessage.mockImplementation(async (_conversationId, _backend, _message, onSystemMessage) => {
+      onSystemMessage('cron ok');
+    });
+
+    await manager.sendMessage({ content: 'schedule it' });
+    const agent = (manager as unknown as { agent: { sendMessage: ReturnType<typeof vi.fn> } }).agent;
+    agent.sendMessage.mockClear();
+    mockEmit.mockClear();
+    mockSetProcessing.mockClear();
+
+    (manager as unknown as { currentMsgId: string | null; currentMsgContent: string }).currentMsgId = 'msg-1';
+    (manager as unknown as { currentMsgContent: string }).currentMsgContent = '[CRON_CREATE]';
+
+    vi.setSystemTime(new Date('2026-04-09T05:00:00Z'));
+    await capturedCallbacks.onSignalEvent!({
+      type: 'finish',
+      conversation_id: 'test-conv',
+      msg_id: 'finish-1',
+      data: null,
+    });
+
+    expect(manager.isTurnInProgress).toBe(true);
+    expect(manager.status).toBe('running');
+    expect(manager.lastActivityAt).toBe(Date.parse('2026-04-09T05:00:00Z'));
+    expect(mockSetProcessing).toHaveBeenCalledWith('test-conv', true);
+    expect(agent.sendMessage).toHaveBeenCalledWith({ content: '[System Response]\ncron ok' });
+    expect(mockEmit).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'finish',
+        conversation_id: 'test-conv',
+      })
+    );
   });
 });

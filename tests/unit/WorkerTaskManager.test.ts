@@ -41,8 +41,11 @@ function makeAgent(id = 'c1', type: AgentType = 'gemini') {
   return {
     type,
     status: undefined,
+    isTurnInProgress: false,
     workspace: '/ws',
     conversation_id: id,
+    lastActivityAt: Date.now(),
+    lastResponseAt: 0,
     kill: vi.fn(),
     sendMessage: vi.fn(),
     stop: vi.fn(),
@@ -121,9 +124,48 @@ describe('WorkerTaskManager', () => {
       reason: 'idle_timeout',
       idleForMs: 36 * 60 * 1000,
       lastActivityAt: '2026-04-02T09:29:00.000Z',
+      lastAgentActivityAt: '2026-04-02T09:29:00.000Z',
     });
     expect(agent.kill).toHaveBeenCalledWith('idle_timeout');
     expect(mgr.getTask('c1')).toBeUndefined();
+  });
+
+  it('uses the later response activity timestamp when deciding whether to reap an ACP agent', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-04-02T10:00:00Z'));
+    mockProcessConfig.getSync.mockReturnValue(900);
+
+    const agent = {
+      ...makeAgent('c1', 'acp'),
+      lastActivityAt: Date.now() - 31 * 60 * 1000,
+      lastResponseAt: Date.now() - 2 * 60 * 1000,
+    };
+    const mgr = new WorkerTaskManager(makeFactory(agent) as any, repo);
+    mgr.addTask('c1', agent as any);
+
+    vi.advanceTimersByTime(5 * 60 * 1000 + 1);
+
+    expect(agent.kill).not.toHaveBeenCalled();
+    expect(mainLog).not.toHaveBeenCalled();
+  });
+
+  it('does not reap an ACP agent while its turn is still in progress', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-04-02T10:00:00Z'));
+
+    const agent = {
+      ...makeAgent('c1', 'acp'),
+      isTurnInProgress: true,
+      lastActivityAt: Date.now() - 31 * 60 * 1000,
+      lastResponseAt: Date.now() - 31 * 60 * 1000,
+    };
+    const mgr = new WorkerTaskManager(makeFactory(agent) as any, repo);
+    mgr.addTask('c1', agent as any);
+
+    vi.advanceTimersByTime(5 * 60 * 1000 + 1);
+
+    expect(agent.kill).not.toHaveBeenCalled();
+    expect(mainLog).not.toHaveBeenCalled();
   });
 
   it('uses configured acp.idleCleanupTimeout when reaping idle cli agents', () => {

@@ -346,6 +346,8 @@ class AcpAgentManager extends BaseAgentManager<AcpAgentManagerData, AcpPermissio
             return;
           }
 
+          this.markResponseActivity();
+
           const pipelineStart = Date.now();
 
           // Reduce status noise: show full lifecycle only for the first turn.
@@ -504,6 +506,7 @@ class AcpAgentManager extends BaseAgentManager<AcpAgentManagerData, AcpPermissio
         onSignalEvent: async (v) => {
           // Flush buffered text chunks before handling turn-level signals
           this.flushBufferedStreamTextMessages();
+          this.markResponseActivity();
 
           // 仅发送信号到前端，不更新消息列表
           if (v.type === 'acp_permission') {
@@ -554,23 +557,13 @@ class AcpAgentManager extends BaseAgentManager<AcpAgentManagerData, AcpPermissio
             return;
           }
 
-          // Clear busy guard and finalize thinking message when turn ends
-          if (v.type === 'finish') {
-            cronBusyGuard.setProcessing(this.conversation_id, false);
-            this.status = 'finished';
-            // Finalize thinking message with done status
-            if (this.thinkingMsgId) {
-              this.emitThinkingMessage('', 'done');
-              this.thinkingMsgId = null;
-              this.thinkingStartTime = null;
-              this.thinkingContent = '';
-            }
-            // Check for SKILL_SUGGEST.md updates (registered by cron executor)
-            skillSuggestWatcher.onFinish(this.conversation_id);
-          }
+          let suppressFinishSignal = false;
 
           // Process cron commands when turn ends (finish signal)
-          // ACP streams content in chunks, so we check the accumulated content here
+          // ACP streams content in chunks, so we check the accumulated content here.
+          // If cron execution produces follow-up system feedback, keep the current
+          // turn open and wait for the continuation's finish/error signal instead
+          // of finalizing on this intermediate finish.
           if (v.type === 'finish' && this.currentMsgContent && hasCronCommands(this.currentMsgContent)) {
             const message: TMessage = {
               id: this.currentMsgId || uuid(),
@@ -598,11 +591,39 @@ class AcpAgentManager extends BaseAgentManager<AcpAgentManagerData, AcpPermissio
             // Send collected responses back to AI agent so it can continue
             if (collectedResponses.length > 0 && this.agent) {
               const feedbackMessage = `[System Response]\n${collectedResponses.join('\n')}`;
-              await this.agent.sendMessage({ content: feedbackMessage });
+              this.markCronFollowUpStarted();
+              const followUpResult = await this.agent.sendMessage({ content: feedbackMessage });
+              if (followUpResult.success) {
+                suppressFinishSignal = true;
+              } else {
+                this.clearBusyState();
+              }
             }
             // Reset after processing
             this.currentMsgId = null;
             this.currentMsgContent = '';
+          }
+
+          // Clear busy guard and finalize thinking message when turn ends.
+          // Skip this on cron follow-up continuation so the next finish/error
+          // remains the terminal signal for the whole turn.
+          if (v.type === 'finish' && !suppressFinishSignal) {
+            cronBusyGuard.setProcessing(this.conversation_id, false);
+            this.markTurnFinished();
+            this.status = 'finished';
+            // Finalize thinking message with done status
+            if (this.thinkingMsgId) {
+              this.emitThinkingMessage('', 'done');
+              this.thinkingMsgId = null;
+              this.thinkingStartTime = null;
+              this.thinkingContent = '';
+            }
+            // Check for SKILL_SUGGEST.md updates (registered by cron executor)
+            skillSuggestWatcher.onFinish(this.conversation_id);
+          }
+
+          if (suppressFinishSignal) {
+            return;
           }
 
           ipcBridge.acpConversation.responseStream.emit(v);
@@ -696,6 +717,7 @@ class AcpAgentManager extends BaseAgentManager<AcpAgentManagerData, AcpPermissio
     const managerSendStart = Date.now();
     // Mark conversation as busy to prevent cron jobs from running
     cronBusyGuard.setProcessing(this.conversation_id, true);
+    this.markTurnStarted();
     // Set status to running when message is being processed
     this.status = 'running';
     try {
@@ -1187,7 +1209,19 @@ class AcpAgentManager extends BaseAgentManager<AcpAgentManagerData, AcpPermissio
    */
   private clearBusyState(): void {
     cronBusyGuard.setProcessing(this.conversation_id, false);
+    this.markTurnFinished();
     this.status = 'finished';
+  }
+
+  /**
+   * Keep the current turn alive while we send internal cron follow-up feedback
+   * back to the ACP backend and wait for the continuation to complete.
+   */
+  private markCronFollowUpStarted(): void {
+    this._lastActivityAt = Date.now();
+    cronBusyGuard.setProcessing(this.conversation_id, true);
+    this.markTurnStarted();
+    this.status = 'running';
   }
 
   private async saveContextUsage(usage: { used: number; size: number }): Promise<void> {
@@ -1271,6 +1305,7 @@ class AcpAgentManager extends BaseAgentManager<AcpAgentManagerData, AcpPermissio
   kill(reason?: AgentKillReason) {
     this.flushBufferedStreamTextMessages();
     this.flushThinkingToDb(undefined, 'done');
+    this.markTurnFinished();
 
     let killed = false;
     const GRACE_PERIOD_MS = 500; // Allow child process time to exit cleanly
