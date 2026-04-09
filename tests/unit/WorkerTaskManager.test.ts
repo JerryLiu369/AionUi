@@ -1,11 +1,17 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 vi.mock('electron', () => ({ app: { isPackaged: false, getPath: vi.fn(() => '/tmp') } }));
-const { mainLog } = vi.hoisted(() => ({
+const { mainLog, mockProcessConfig } = vi.hoisted(() => ({
   mainLog: vi.fn(),
+  mockProcessConfig: {
+    getSync: vi.fn(),
+  },
 }));
 vi.mock('@process/utils/mainLogger', () => ({
   mainLog,
+}));
+vi.mock('@process/utils/initStorage', () => ({
+  ProcessConfig: mockProcessConfig,
 }));
 
 import { WorkerTaskManager } from '../../src/process/task/WorkerTaskManager';
@@ -54,6 +60,7 @@ describe('WorkerTaskManager', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockProcessConfig.getSync.mockReturnValue(undefined);
     repo = makeRepo();
   });
 
@@ -117,6 +124,59 @@ describe('WorkerTaskManager', () => {
     });
     expect(agent.kill).toHaveBeenCalledWith('idle_timeout');
     expect(mgr.getTask('c1')).toBeUndefined();
+  });
+
+  it('uses configured acp.idleCleanupTimeout when reaping idle cli agents', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-04-02T10:00:00Z'));
+    mockProcessConfig.getSync.mockReturnValue(900);
+
+    const agent = {
+      ...makeAgent('c1', 'acp'),
+      lastActivityAt: Date.now() - 20 * 60 * 1000,
+    };
+    const mgr = new WorkerTaskManager(makeFactory(agent) as any, repo);
+    mgr.addTask('c1', agent as any);
+
+    vi.advanceTimersByTime(5 * 60 * 1000 + 1);
+
+    expect(mockProcessConfig.getSync).toHaveBeenCalledWith('acp.idleCleanupTimeout');
+    expect(agent.kill).toHaveBeenCalledWith('idle_timeout');
+  });
+
+  it('does not reap ACP agents before the configured idle timeout', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-04-02T10:00:00Z'));
+    mockProcessConfig.getSync.mockReturnValue(3600);
+
+    const agent = {
+      ...makeAgent('c1', 'acp'),
+      lastActivityAt: Date.now() - 31 * 60 * 1000,
+    };
+    const mgr = new WorkerTaskManager(makeFactory(agent) as any, repo);
+    mgr.addTask('c1', agent as any);
+
+    vi.advanceTimersByTime(5 * 60 * 1000 + 1);
+
+    expect(agent.kill).not.toHaveBeenCalled();
+    expect(mgr.getTask('c1')).toBe(agent);
+  });
+
+  it('clamps configured acp.idleCleanupTimeout to 300 seconds minimum', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-04-02T10:00:00Z'));
+    mockProcessConfig.getSync.mockReturnValue(60);
+
+    const agent = {
+      ...makeAgent('c1', 'acp'),
+      lastActivityAt: Date.now() - 4 * 60 * 1000,
+    };
+    const mgr = new WorkerTaskManager(makeFactory(agent) as any, repo);
+    mgr.addTask('c1', agent as any);
+
+    vi.advanceTimersByTime(5 * 60 * 1000 + 1);
+
+    expect(agent.kill).toHaveBeenCalledWith('idle_timeout');
   });
 
   it('kill is a no-op for unknown id', () => {

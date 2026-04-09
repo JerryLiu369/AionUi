@@ -11,12 +11,14 @@ import type { BuildConversationOptions, AgentType } from './agentTypes';
 import type { IConversationRepository } from '@process/services/database/IConversationRepository';
 import type { TChatConversation } from '@/common/config/storage';
 import { cronBusyGuard } from '@process/services/cron/CronBusyGuard';
+import { ProcessConfig } from '@process/utils/initStorage';
 import { mainLog } from '@process/utils/mainLogger';
 
 /** CLI-backed agents (acp, codex) idle for longer than this are killed to reclaim memory. */
-const AGENT_IDLE_TIMEOUT_MS = 30 * 60 * 1000;
+const AGENT_IDLE_TIMEOUT_DEFAULT_MS = 5 * 60 * 1000;
 /** How often to scan for idle CLI-backed agents. */
 const AGENT_IDLE_CHECK_INTERVAL_MS = 5 * 60 * 1000;
+const MIN_AGENT_IDLE_TIMEOUT_SECONDS = 300;
 
 export class WorkerTaskManager implements IWorkerTaskManager {
   private taskList: Array<{ id: string; task: IAgentManager }> = [];
@@ -29,13 +31,22 @@ export class WorkerTaskManager implements IWorkerTaskManager {
     this.idleCheckTimer = setInterval(() => this.killIdleCliAgents(), AGENT_IDLE_CHECK_INTERVAL_MS);
   }
 
+  private getAgentIdleTimeoutMs(): number {
+    const configuredSeconds = ProcessConfig.getSync('acp.idleCleanupTimeout');
+    if (typeof configuredSeconds !== 'number' || !Number.isFinite(configuredSeconds) || configuredSeconds <= 0) {
+      return AGENT_IDLE_TIMEOUT_DEFAULT_MS;
+    }
+    return Math.max(MIN_AGENT_IDLE_TIMEOUT_SECONDS, configuredSeconds) * 1000;
+  }
+
   private killIdleCliAgents(): void {
     const now = Date.now();
+    const idleTimeoutMs = this.getAgentIdleTimeoutMs();
     const idleTasks = this.taskList.filter(
       (item) =>
         item.task.type === 'acp' &&
         !cronBusyGuard.isProcessing(item.id) &&
-        now - item.task.lastActivityAt > AGENT_IDLE_TIMEOUT_MS
+        now - item.task.lastActivityAt > idleTimeoutMs
     );
     for (const item of idleTasks) {
       mainLog('[WorkerTaskManager]', 'Killing idle ACP agent', {

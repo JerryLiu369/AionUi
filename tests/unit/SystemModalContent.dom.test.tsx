@@ -92,11 +92,13 @@ const mockShowOpen = vi.fn();
 const mockUpdateSystemInfo = vi.fn();
 const mockGetStartOnBootStatus = vi.fn();
 const mockSetStartOnBoot = vi.fn();
+const mockConfigStorageGet = vi.fn();
+const mockConfigStorageSet = vi.fn();
 
 vi.mock('@/common/config/storage', () => ({
   ConfigStorage: {
-    get: vi.fn().mockResolvedValue(undefined),
-    set: vi.fn().mockResolvedValue(undefined),
+    get: (...args: any[]) => mockConfigStorageGet(...args),
+    set: (...args: any[]) => mockConfigStorageSet(...args),
   },
 }));
 
@@ -247,6 +249,8 @@ describe('SystemModalContent', () => {
     mockSetCronNotificationEnabled.mockResolvedValue(undefined);
     mockSetSaveUploadToWorkspace.mockResolvedValue(undefined);
     mockSetCommandQueueEnabled.mockResolvedValue(undefined);
+    mockConfigStorageGet.mockResolvedValue(undefined);
+    mockConfigStorageSet.mockResolvedValue(undefined);
   });
 
   it('should render system settings with language switcher and preferences', async () => {
@@ -259,9 +263,65 @@ describe('SystemModalContent', () => {
     expect(screen.getByText('settings.language')).toBeInTheDocument();
     expect(screen.getByText('settings.startOnBoot')).toBeInTheDocument();
     expect(screen.getByText('settings.closeToTray')).toBeInTheDocument();
+    expect(screen.getByText('settings.promptTimeout')).toBeInTheDocument();
+    expect(screen.getByText('settings.acpIdleCleanupTimeout')).toBeInTheDocument();
     expect(screen.getByText('settings.saveUploadToWorkspace')).toBeInTheDocument();
     expect(screen.getByText('settings.commandQueueEnabled')).toBeInTheDocument();
     expect(screen.getByText('settings.commandQueueEnabledDesc')).toBeInTheDocument();
+  });
+
+  it('should persist ACP idle cleanup timeout changes', async () => {
+    render(<SystemModalContent />);
+
+    await waitFor(() => {
+      expect(screen.getByText('settings.acpIdleCleanupTimeout')).toBeInTheDocument();
+    });
+
+    const inputs = screen.getAllByRole('spinbutton');
+    const idleCleanupTimeoutInput = inputs[1];
+
+    await act(async () => {
+      fireEvent.change(idleCleanupTimeoutInput, { target: { value: '900' } });
+      fireEvent.blur(idleCleanupTimeoutInput);
+    });
+
+    await waitFor(() => {
+      expect(mockConfigStorageSet).toHaveBeenCalledWith('acp.idleCleanupTimeout', 900);
+    });
+  });
+
+  it('should expose a 300-second minimum for ACP idle cleanup timeout input', async () => {
+    render(<SystemModalContent />);
+
+    await waitFor(() => {
+      expect(screen.getByText('settings.acpIdleCleanupTimeout')).toBeInTheDocument();
+    });
+
+    const inputs = screen.getAllByRole('spinbutton');
+    const idleCleanupTimeoutInput = inputs[1];
+
+    expect(idleCleanupTimeoutInput).toHaveAttribute('aria-valuemin', '300');
+    expect(idleCleanupTimeoutInput).toHaveValue('300');
+  });
+
+  it('should clamp stored ACP idle cleanup timeout values below 300 seconds on load', async () => {
+    mockConfigStorageGet.mockImplementation((key: string) => {
+      if (key === 'acp.idleCleanupTimeout') return Promise.resolve(60);
+      return Promise.resolve(undefined);
+    });
+
+    render(<SystemModalContent />);
+
+    await waitFor(() => {
+      expect(screen.getByText('settings.acpIdleCleanupTimeout')).toBeInTheDocument();
+    });
+
+    const inputs = screen.getAllByRole('spinbutton');
+    const idleCleanupTimeoutInput = inputs[1];
+
+    await waitFor(() => {
+      expect(idleCleanupTimeoutInput).toHaveValue('300');
+    });
   });
 
   it('should toggle command queue when the switch is clicked', async () => {

@@ -164,6 +164,7 @@
   "notification": "알림",
   "cronNotificationEnabled": "예약 작업 완료 알림",
   "promptTimeout": "LLM 요청 시간 초과 (초)",
+  "acpIdleCleanupTimeout": "ACP 유휴 정리 시간(초)",
   "gemini": "Gemini",
   "model": "모델",
   "system": "시스템",

@@ -164,6 +164,7 @@
   "notification": "Уведомления",
   "cronNotificationEnabled": "Уведомление о завершении запланированных задач",
   "promptTimeout": "Таймаут запроса LLM (сек)",
+  "acpIdleCleanupTimeout": "Очистка простоя ACP (сек)",
   "gemini": "Gemini CLI",
   "model": "Модель",
   "system": "Система",

@@ -29,6 +29,7 @@ import PreferenceRow from './PreferenceRow';
  * and developer tools (dev mode only).
  */
 const SystemModalContent: React.FC = () => {
+  const ACP_IDLE_CLEANUP_TIMEOUT_MIN_SECONDS = 300;
   const { t } = useTranslation();
   const isDesktop = isElectronDesktop();
   const [form] = Form.useForm();
@@ -48,6 +49,7 @@ const SystemModalContent: React.FC = () => {
   const [notificationEnabled, setNotificationEnabled] = useState(true);
   const [cronNotificationEnabled, setCronNotificationEnabled] = useState(false);
   const [promptTimeout, setPromptTimeout] = useState<number>(300);
+  const [idleCleanupTimeout, setIdleCleanupTimeout] = useState<number>(300);
   const [saveUploadToWorkspace, setSaveUploadToWorkspace] = useState(false);
   const [commandQueueEnabled, setCommandQueueEnabled] = useState(false);
 
@@ -94,6 +96,14 @@ const SystemModalContent: React.FC = () => {
       })
       .catch(() => {});
   }, []);
+
+  useEffect(() => {
+    ConfigStorage.get('acp.idleCleanupTimeout')
+      .then((val) => {
+        if (val && val > 0) setIdleCleanupTimeout(Math.max(ACP_IDLE_CLEANUP_TIMEOUT_MIN_SECONDS, val));
+      })
+      .catch(() => {});
+  }, [ACP_IDLE_CLEANUP_TIMEOUT_MIN_SECONDS]);
 
   useEffect(() => {
     ipcBridge.systemSettings.getSaveUploadToWorkspace
@@ -160,6 +170,15 @@ const SystemModalContent: React.FC = () => {
     ConfigStorage.set('acp.promptTimeout', seconds).catch(() => {});
   }, []);
 
+  const handleIdleCleanupTimeoutChange = useCallback(
+    (val: number | undefined) => {
+      const seconds = Math.max(ACP_IDLE_CLEANUP_TIMEOUT_MIN_SECONDS, val ?? ACP_IDLE_CLEANUP_TIMEOUT_MIN_SECONDS);
+      setIdleCleanupTimeout(seconds);
+      ConfigStorage.set('acp.idleCleanupTimeout', seconds).catch(() => {});
+    },
+    [ACP_IDLE_CLEANUP_TIMEOUT_MIN_SECONDS]
+  );
+
   const handleSaveUploadToWorkspaceChange = useCallback((checked: boolean) => {
     setSaveUploadToWorkspace(checked);
     ipcBridge.systemSettings.setSaveUploadToWorkspace.invoke({ enabled: checked }).catch(() => {
@@ -219,6 +238,21 @@ const SystemModalContent: React.FC = () => {
           min={30}
           max={3600}
           step={30}
+          style={{ width: 120 }}
+          suffix='s'
+        />
+      ),
+    },
+    {
+      key: 'acpIdleCleanupTimeout',
+      label: t('settings.acpIdleCleanupTimeout'),
+      component: (
+        <InputNumber
+          value={idleCleanupTimeout}
+          onChange={handleIdleCleanupTimeoutChange}
+          min={ACP_IDLE_CLEANUP_TIMEOUT_MIN_SECONDS}
+          max={86400}
+          step={60}
           style={{ width: 120 }}
           suffix='s'
         />

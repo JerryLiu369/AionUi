@@ -164,6 +164,7 @@
   "notification": "通知",
   "cronNotificationEnabled": "定期タスク完了通知",
   "promptTimeout": "LLM リクエストタイムアウト（秒）",
+  "acpIdleCleanupTimeout": "ACP アイドルクリーンアップ時間（秒）",
   "gemini": "Gemini",
   "model": "モデル",
   "system": "システム",

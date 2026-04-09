@@ -164,6 +164,7 @@
   "notification": "Bildirimler",
   "cronNotificationEnabled": "Zamanlanmış Görev Tamamlanma",
   "promptTimeout": "LLM İstek Zaman Aşımı (sn)",
+  "acpIdleCleanupTimeout": "ACP Boşta Temizleme (sn)",
   "gemini": "Gemini",
   "model": "Model",
   "system": "Sistem",

@@ -164,6 +164,7 @@
   "notification": "Notifications",
   "cronNotificationEnabled": "Scheduled Task Completion",
   "promptTimeout": "LLM Prompt Timeout (s)",
+  "acpIdleCleanupTimeout": "ACP Idle Cleanup (s)",
   "gemini": "Gemini CLI",
   "model": "Model",
   "system": "System",

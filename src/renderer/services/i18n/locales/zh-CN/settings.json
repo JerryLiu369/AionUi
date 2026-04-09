@@ -164,6 +164,7 @@
   "notification": "通知",
   "cronNotificationEnabled": "定时任务完成通知",
   "promptTimeout": "LLM 请求超时时间（秒）",
+  "acpIdleCleanupTimeout": "ACP 空闲清理时间（秒）",
   "gemini": "Gemini CLI",
   "model": "模型",
   "system": "系统",
