@@ -1,6 +1,12 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 vi.mock('electron', () => ({ app: { isPackaged: false, getPath: vi.fn(() => '/tmp') } }));
+const { mainLog } = vi.hoisted(() => ({
+  mainLog: vi.fn(),
+}));
+vi.mock('@process/utils/mainLogger', () => ({
+  mainLog,
+}));
 
 import { WorkerTaskManager } from '../../src/process/task/WorkerTaskManager';
 import type { IConversationRepository } from '../../src/process/services/database/IConversationRepository';
@@ -102,6 +108,13 @@ describe('WorkerTaskManager', () => {
 
     vi.advanceTimersByTime(5 * 60 * 1000 + 1);
 
+    expect(mainLog).toHaveBeenCalledWith('[WorkerTaskManager]', 'Killing idle ACP agent', {
+      conversationId: 'c1',
+      type: 'acp',
+      reason: 'idle_timeout',
+      idleForMs: 36 * 60 * 1000,
+      lastActivityAt: '2026-04-02T09:29:00.000Z',
+    });
     expect(agent.kill).toHaveBeenCalledWith('idle_timeout');
     expect(mgr.getTask('c1')).toBeUndefined();
   });
