@@ -53,15 +53,18 @@ describe('zoom', () => {
     const { getZoomShortcutAction } = await import('@process/utils/zoom');
 
     expect(
-      getZoomShortcutAction({
-        type: 'keyDown',
-        key: '=',
-        code: 'Equal',
-        isComposing: false,
-        control: true,
-        meta: false,
-        alt: false,
-      })
+      getZoomShortcutAction(
+        {
+          type: 'keyDown',
+          key: '=',
+          code: 'Equal',
+          isComposing: false,
+          control: true,
+          meta: false,
+          alt: false,
+        },
+        'linux'
+      )
     ).toBe('zoomIn');
 
     expect(
@@ -84,27 +87,33 @@ describe('zoom', () => {
     const { getZoomShortcutAction } = await import('@process/utils/zoom');
 
     expect(
-      getZoomShortcutAction({
-        type: 'keyDown',
-        key: '-',
-        code: 'Minus',
-        isComposing: false,
-        control: true,
-        meta: false,
-        alt: false,
-      })
+      getZoomShortcutAction(
+        {
+          type: 'keyDown',
+          key: '-',
+          code: 'Minus',
+          isComposing: false,
+          control: true,
+          meta: false,
+          alt: false,
+        },
+        'linux'
+      )
     ).toBe('zoomOut');
 
     expect(
-      getZoomShortcutAction({
-        type: 'keyDown',
-        key: 'Subtract',
-        code: 'NumpadSubtract',
-        isComposing: false,
-        control: true,
-        meta: false,
-        alt: false,
-      })
+      getZoomShortcutAction(
+        {
+          type: 'keyDown',
+          key: 'Subtract',
+          code: 'NumpadSubtract',
+          isComposing: false,
+          control: true,
+          meta: false,
+          alt: false,
+        },
+        'linux'
+      )
     ).toBe('zoomOut');
   });
 
@@ -112,27 +121,33 @@ describe('zoom', () => {
     const { getZoomShortcutAction } = await import('@process/utils/zoom');
 
     expect(
-      getZoomShortcutAction({
-        type: 'keyDown',
-        key: '0',
-        code: 'Digit0',
-        isComposing: false,
-        control: true,
-        meta: false,
-        alt: false,
-      })
+      getZoomShortcutAction(
+        {
+          type: 'keyDown',
+          key: '0',
+          code: 'Digit0',
+          isComposing: false,
+          control: true,
+          meta: false,
+          alt: false,
+        },
+        'linux'
+      )
     ).toBe('resetZoom');
 
     expect(
-      getZoomShortcutAction({
-        type: 'keyDown',
-        key: '=',
-        code: 'Equal',
-        isComposing: false,
-        control: true,
-        meta: false,
-        alt: true,
-      })
+      getZoomShortcutAction(
+        {
+          type: 'keyDown',
+          key: '=',
+          code: 'Equal',
+          isComposing: false,
+          control: true,
+          meta: false,
+          alt: true,
+        },
+        'linux'
+      )
     ).toBeNull();
   });
 
@@ -140,15 +155,18 @@ describe('zoom', () => {
     const { getZoomShortcutAction } = await import('@process/utils/zoom');
 
     expect(
-      getZoomShortcutAction({
-        type: 'keyDown',
-        key: 'à',
-        code: 'Digit0',
-        isComposing: false,
-        control: true,
-        meta: false,
-        alt: false,
-      })
+      getZoomShortcutAction(
+        {
+          type: 'keyDown',
+          key: 'à',
+          code: 'Digit0',
+          isComposing: false,
+          control: true,
+          meta: false,
+          alt: false,
+        },
+        'linux'
+      )
     ).toBeNull();
   });
 
@@ -156,15 +174,18 @@ describe('zoom', () => {
     const { getZoomShortcutAction } = await import('@process/utils/zoom');
 
     expect(
-      getZoomShortcutAction({
-        type: 'keyDown',
-        key: 'Unidentified',
-        code: 'NumpadAdd',
-        isComposing: false,
-        control: true,
-        meta: false,
-        alt: false,
-      })
+      getZoomShortcutAction(
+        {
+          type: 'keyDown',
+          key: 'Unidentified',
+          code: 'NumpadAdd',
+          isComposing: false,
+          control: true,
+          meta: false,
+          alt: false,
+        },
+        'linux'
+      )
     ).toBe('zoomIn');
   });
 });
