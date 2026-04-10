@@ -135,4 +135,36 @@ describe('zoom', () => {
       })
     ).toBeNull();
   });
+
+  it('does not match non-US top-row physical keys by code alone', async () => {
+    const { getZoomShortcutAction } = await import('@process/utils/zoom');
+
+    expect(
+      getZoomShortcutAction({
+        type: 'keyDown',
+        key: 'à',
+        code: 'Digit0',
+        isComposing: false,
+        control: true,
+        meta: false,
+        alt: false,
+      })
+    ).toBeNull();
+  });
+
+  it('still supports numpad zoom shortcuts through code fallback', async () => {
+    const { getZoomShortcutAction } = await import('@process/utils/zoom');
+
+    expect(
+      getZoomShortcutAction({
+        type: 'keyDown',
+        key: 'Unidentified',
+        code: 'NumpadAdd',
+        isComposing: false,
+        control: true,
+        meta: false,
+        alt: false,
+      })
+    ).toBe('zoomIn');
+  });
 });

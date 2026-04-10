@@ -95,7 +95,7 @@ export const setupZoomForWindow = (win: BrowserWindow): void => {
 
 /**
  * Normalize platform-specific keyboard input into a zoom intent.
- * Use physical key codes first, then fall back to the produced key.
+ * Prefer produced keys for layout safety; only rely on numpad codes as fallback.
  */
 export const getZoomShortcutAction = (
   input: Pick<Input, 'type' | 'key' | 'code' | 'isComposing' | 'control' | 'meta' | 'alt'>,
@@ -110,20 +110,6 @@ export const getZoomShortcutAction = (
     return null;
   }
 
-  switch (input.code) {
-    case 'Equal':
-    case 'NumpadAdd':
-      return 'zoomIn';
-    case 'Minus':
-    case 'NumpadSubtract':
-      return 'zoomOut';
-    case 'Digit0':
-    case 'Numpad0':
-      return 'resetZoom';
-    default:
-      break;
-  }
-
   switch (input.key) {
     case '+':
     case '=':
@@ -132,6 +118,17 @@ export const getZoomShortcutAction = (
     case '_':
       return 'zoomOut';
     case '0':
+      return 'resetZoom';
+    default:
+      break;
+  }
+
+  switch (input.code) {
+    case 'NumpadAdd':
+      return 'zoomIn';
+    case 'NumpadSubtract':
+      return 'zoomOut';
+    case 'Numpad0':
       return 'resetZoom';
     default:
       return null;
