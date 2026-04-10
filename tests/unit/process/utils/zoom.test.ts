@@ -48,4 +48,91 @@ describe('zoom', () => {
     expect(setZoomFactorA).toHaveBeenCalledWith(1.3);
     expect(setZoomFactorB).toHaveBeenCalledWith(1.3);
   });
+
+  it('maps Ctrl/Cmd + equal variants to zoom in', async () => {
+    const { getZoomShortcutAction } = await import('@process/utils/zoom');
+
+    expect(
+      getZoomShortcutAction({
+        type: 'keyDown',
+        key: '=',
+        code: 'Equal',
+        isComposing: false,
+        control: true,
+        meta: false,
+        alt: false,
+      })
+    ).toBe('zoomIn');
+
+    expect(
+      getZoomShortcutAction(
+        {
+          type: 'keyDown',
+          key: '+',
+          code: 'Equal',
+          isComposing: false,
+          control: false,
+          meta: true,
+          alt: false,
+        },
+        'darwin'
+      )
+    ).toBe('zoomIn');
+  });
+
+  it('maps minus and numpad subtract to zoom out', async () => {
+    const { getZoomShortcutAction } = await import('@process/utils/zoom');
+
+    expect(
+      getZoomShortcutAction({
+        type: 'keyDown',
+        key: '-',
+        code: 'Minus',
+        isComposing: false,
+        control: true,
+        meta: false,
+        alt: false,
+      })
+    ).toBe('zoomOut');
+
+    expect(
+      getZoomShortcutAction({
+        type: 'keyDown',
+        key: 'Subtract',
+        code: 'NumpadSubtract',
+        isComposing: false,
+        control: true,
+        meta: false,
+        alt: false,
+      })
+    ).toBe('zoomOut');
+  });
+
+  it('maps zero variants to reset zoom and ignores Alt-modified input', async () => {
+    const { getZoomShortcutAction } = await import('@process/utils/zoom');
+
+    expect(
+      getZoomShortcutAction({
+        type: 'keyDown',
+        key: '0',
+        code: 'Digit0',
+        isComposing: false,
+        control: true,
+        meta: false,
+        alt: false,
+      })
+    ).toBe('resetZoom');
+
+    expect(
+      getZoomShortcutAction({
+        type: 'keyDown',
+        key: '=',
+        code: 'Equal',
+        isComposing: false,
+        control: true,
+        meta: false,
+        alt: true,
+      })
+    ).toBeNull();
+  });
 });
