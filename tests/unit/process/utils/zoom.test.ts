@@ -188,4 +188,23 @@ describe('zoom', () => {
       )
     ).toBe('zoomIn');
   });
+
+  it('does not treat Ctrl+Insert on numpad 0 as reset zoom', async () => {
+    const { getZoomShortcutAction } = await import('@process/utils/zoom');
+
+    expect(
+      getZoomShortcutAction(
+        {
+          type: 'keyDown',
+          key: 'Insert',
+          code: 'Numpad0',
+          isComposing: false,
+          control: true,
+          meta: false,
+          alt: false,
+        },
+        'linux'
+      )
+    ).toBeNull();
+  });
 });

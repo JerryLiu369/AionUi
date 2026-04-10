@@ -129,7 +129,7 @@ export const getZoomShortcutAction = (
     case 'NumpadSubtract':
       return 'zoomOut';
     case 'Numpad0':
-      return 'resetZoom';
+      return input.key === 'Insert' ? null : 'resetZoom';
     default:
       return null;
   }
