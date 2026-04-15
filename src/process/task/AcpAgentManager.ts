@@ -345,10 +345,14 @@ class AcpAgentManager extends BaseAgentManager<AcpAgentManagerData, AcpPermissio
         // so there is no missing-finish safety timer for the cron continuation.
         // isTurnInProgress will be cleared when the subsequent finish/error signal
         // arrives, or when kill() is called (e.g. by idle-timeout or user action).
-        const followUpResult = await this.agent.sendMessage({ content: feedbackMessage });
-        if (followUpResult.success) {
-          suppressFinishSignal = true;
-        } else {
+        try {
+          const followUpResult = await this.agent.sendMessage({ content: feedbackMessage });
+          if (followUpResult.success) {
+            suppressFinishSignal = true;
+          } else {
+            this.clearBusyState();
+          }
+        } catch {
           this.clearBusyState();
         }
       }
