@@ -337,7 +337,6 @@ class AcpAgentManager extends BaseAgentManager<AcpAgentManagerData, AcpPermissio
       if (collectedResponses.length > 0 && this.agent) {
         const feedbackMessage = `[System Response]\n${collectedResponses.join('\n')}`;
         this._lastActivityAt = Date.now();
-        this.markTurnStarted();
         // Note: this sendMessage call bypasses sendAgentMessageWithFinishFallback,
         // so there is no missing-finish safety timer for the cron continuation.
         // isTurnInProgress will be cleared when the subsequent finish/error signal

@@ -299,8 +299,10 @@ describe('AcpAgentManager.handleFinishSignal — cron follow-up path', () => {
     vi.mocked(processCronInMessage).mockResolvedValue(undefined);
   });
 
-  it('suppresses finish signal and marks isTurnInProgress when cron follow-up succeeds', async () => {
+  it('suppresses finish signal and keeps isTurnInProgress when cron follow-up succeeds', async () => {
     const { manager, mockAgent } = makeManager('cron-ok');
+    // In production, send() sets isTurnInProgress=true before handleFinishSignal is ever called.
+    (manager as unknown as { markTurnStarted: () => void }).markTurnStarted();
     // Simulate that the last agent message contained a cron command
     (manager as unknown as { currentMsgContent: string }).currentMsgContent = '/cron run';
     vi.mocked(hasCronCommands).mockReturnValue(true);
