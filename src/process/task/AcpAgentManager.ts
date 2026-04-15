@@ -296,9 +296,6 @@ class AcpAgentManager extends BaseAgentManager<AcpAgentManagerData, AcpPermissio
     this.clearMissingFinishFallback();
     this.flushBufferedStreamTextMessages();
 
-    cronBusyGuard.setProcessing(this.conversation_id, false);
-    this.status = 'finished';
-
     if (this.thinkingMsgId) {
       this.emitThinkingMessage('', 'done');
       this.thinkingMsgId = null;
@@ -311,6 +308,8 @@ class AcpAgentManager extends BaseAgentManager<AcpAgentManagerData, AcpPermissio
     // If cron execution produces follow-up system feedback, keep the current
     // turn open and wait for the continuation's finish/error signal instead
     // of finalizing on this intermediate finish.
+    // cronBusyGuard stays true throughout to prevent concurrent cron jobs from
+    // firing in the window between the agent finishing and the follow-up being sent.
     let suppressFinishSignal = false;
 
     if (this.currentMsgContent && hasCronCommands(this.currentMsgContent)) {
@@ -338,9 +337,7 @@ class AcpAgentManager extends BaseAgentManager<AcpAgentManagerData, AcpPermissio
       if (collectedResponses.length > 0 && this.agent) {
         const feedbackMessage = `[System Response]\n${collectedResponses.join('\n')}`;
         this._lastActivityAt = Date.now();
-        cronBusyGuard.setProcessing(this.conversation_id, true);
         this.markTurnStarted();
-        this.status = 'running';
         // Note: this sendMessage call bypasses sendAgentMessageWithFinishFallback,
         // so there is no missing-finish safety timer for the cron continuation.
         // isTurnInProgress will be cleared when the subsequent finish/error signal
@@ -365,6 +362,8 @@ class AcpAgentManager extends BaseAgentManager<AcpAgentManagerData, AcpPermissio
       return;
     }
 
+    cronBusyGuard.setProcessing(this.conversation_id, false);
+    this.status = 'finished';
     this.markTurnFinished();
 
     const finishMessage: IResponseMessage = {

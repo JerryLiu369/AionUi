@@ -320,8 +320,8 @@ describe('AcpAgentManager.handleFinishSignal — cron follow-up path', () => {
 
     // Turn is still in progress because the follow-up sendMessage succeeded
     expect(manager.isTurnInProgress).toBe(true);
-    // cronBusyGuard was re-set to processing for the follow-up turn
-    expect(mockSetProcessing).toHaveBeenCalledWith('cron-ok', true);
+    // cronBusyGuard was never released — no false→true flip occurs
+    expect(mockSetProcessing).not.toHaveBeenCalledWith('cron-ok', false);
   });
 
   it('clears busy state when cron follow-up sendMessage returns failure', async () => {
