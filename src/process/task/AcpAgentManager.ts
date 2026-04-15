@@ -308,6 +308,11 @@ class AcpAgentManager extends BaseAgentManager<AcpAgentManagerData, AcpPermissio
 
     skillSuggestWatcher.onFinish(this.conversation_id);
 
+    // If cron execution produces follow-up system feedback, keep the current
+    // turn open and wait for the continuation's finish/error signal instead
+    // of finalizing on this intermediate finish.
+    let suppressFinishSignal = false;
+
     if (this.currentMsgContent && hasCronCommands(this.currentMsgContent)) {
       const cronMessage: TMessage = {
         id: this.currentMsgId || uuid(),
@@ -331,14 +336,28 @@ class AcpAgentManager extends BaseAgentManager<AcpAgentManagerData, AcpPermissio
         ipcBridge.acpConversation.responseStream.emit(systemMessage);
       });
       if (collectedResponses.length > 0 && this.agent) {
-        const feedbackMessage = `[System Response]
-${collectedResponses.join('\n')}`;
-        await this.agent.sendMessage({ content: feedbackMessage });
+        const feedbackMessage = `[System Response]\n${collectedResponses.join('\n')}`;
+        this._lastActivityAt = Date.now();
+        cronBusyGuard.setProcessing(this.conversation_id, true);
+        this.markTurnStarted();
+        this.status = 'running';
+        const followUpResult = await this.agent.sendMessage({ content: feedbackMessage });
+        if (followUpResult.success) {
+          suppressFinishSignal = true;
+        } else {
+          this.clearBusyState();
+        }
       }
     }
 
     this.currentMsgId = null;
     this.currentMsgContent = '';
+
+    if (suppressFinishSignal) {
+      return;
+    }
+
+    this.markTurnFinished();
 
     const finishMessage: IResponseMessage = {
       ...(message as IResponseMessage),
@@ -947,6 +966,7 @@ ${collectedResponses.join('\n')}`;
     const managerSendStart = Date.now();
     // Mark conversation as busy to prevent cron jobs from running
     cronBusyGuard.setProcessing(this.conversation_id, true);
+    this.markTurnStarted();
     // Set status to running when message is being processed
     this.status = 'running';
     try {
@@ -1446,6 +1466,7 @@ ${collectedResponses.join('\n')}`;
    */
   private clearBusyState(): void {
     cronBusyGuard.setProcessing(this.conversation_id, false);
+    this.markTurnFinished();
     this.status = 'finished';
   }
 
@@ -1530,6 +1551,7 @@ ${collectedResponses.join('\n')}`;
   kill(_reason?: AgentKillReason) {
     this.flushBufferedStreamTextMessages();
     this.flushThinkingToDb(undefined, 'done');
+    this.markTurnFinished();
 
     let killed = false;
     const GRACE_PERIOD_MS = 500; // Allow child process time to exit cleanly

@@ -29,8 +29,10 @@ function makeAgent(id = 'c1', type: AgentType = 'gemini') {
   return {
     type,
     status: undefined,
+    isTurnInProgress: false,
     workspace: '/ws',
     conversation_id: id,
+    lastActivityAt: Date.now(),
     kill: vi.fn(),
     sendMessage: vi.fn(),
     stop: vi.fn(),
@@ -96,15 +98,13 @@ describe('WorkerTaskManager', () => {
 
     const agent = {
       ...makeAgent('c1', 'acp'),
-      status: 'finished',
+      isTurnInProgress: false,
       lastActivityAt: Date.now() - 6 * 60 * 1000,
-    };
+      };
     const mgr = new WorkerTaskManager(makeFactory(agent) as any, repo);
     mgr.addTask('c1', agent as any);
 
     vi.advanceTimersByTime(1 * 60 * 1000 + 1);
-    // killIdleCliAgents reads config asynchronously — flush the microtask queue
-    await vi.advanceTimersByTimeAsync(0);
 
     expect(agent.kill).toHaveBeenCalledWith('idle_timeout');
     expect(mgr.getTask('c1')).toBeUndefined();

@@ -72,6 +72,14 @@ vi.mock('@process/task/BaseAgentManager', () => ({
     workspace = '';
     bootstrapping = false;
     yoloMode = false;
+    _isTurnInProgress = false;
+    get isTurnInProgress() {
+      return this._isTurnInProgress;
+    }
+    _lastActivityAt = Date.now();
+    get lastActivityAt() {
+      return this._lastActivityAt;
+    }
     constructor(_type: string, data: Record<string, unknown>, _emitter: unknown) {
       if (data?.conversation_id) this.conversation_id = data.conversation_id;
       if (data?.workspace) this.workspace = data.workspace;
@@ -82,6 +90,12 @@ vi.mock('@process/task/BaseAgentManager', () => ({
     addConfirmation() {}
     getConfirmations() {
       return [];
+    }
+    markTurnStarted() {
+      this._isTurnInProgress = true;
+    }
+    markTurnFinished() {
+      this._isTurnInProgress = false;
     }
   },
 }));
