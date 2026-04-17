@@ -261,10 +261,9 @@ const GuidActionRow: React.FC<GuidActionRowProps> = ({
         </div>
 
         <Button
-          type='text'
-          size='mini'
-          className='flex items-center gap-4px px-6px text-t-secondary hover:text-t-primary'
-          icon={<FolderOpen theme='outline' size='14' fill='currentColor' style={{ lineHeight: 0 }} />}
+          className='sendbox-model-btn'
+          shape='round'
+          size='small'
           onClick={() => {
             ipcBridge.dialog.showOpen
               .invoke({ properties: ['openDirectory', 'createDirectory'] })
@@ -278,7 +277,10 @@ const GuidActionRow: React.FC<GuidActionRowProps> = ({
               });
           }}
         >
-          <span className='text-12px'>{t('conversation.welcome.specifyWorkspace')}</span>
+          <span className='flex items-center gap-6px leading-none'>
+            <FolderOpen theme='outline' size='14' fill='currentColor' style={{ lineHeight: 0, flexShrink: 0 }} />
+            <span>{t('conversation.welcome.specifyWorkspace')}</span>
+          </span>
         </Button>
 
         <div
