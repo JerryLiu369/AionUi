@@ -154,17 +154,6 @@ const GuidActionRow: React.FC<GuidActionRowProps> = ({
             });
         } else if (key === 'device') {
           fileInputRef.current?.click();
-        } else if (key === 'workspace') {
-          ipcBridge.dialog.showOpen
-            .invoke({ properties: ['openDirectory', 'createDirectory'] })
-            .then((dirs) => {
-              if (dirs && dirs[0]) {
-                onSelectWorkspace(dirs[0]);
-              }
-            })
-            .catch((error) => {
-              console.error('Failed to open directory dialog:', error);
-            });
         }
       }}
     >
