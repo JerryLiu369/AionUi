@@ -89,8 +89,8 @@ describe('initAgent — skill support', () => {
 
   describe('hasNativeSkillSupport', () => {
     it('should return true for all backends with verified native skill dirs', () => {
+      // Includes both ACP backends and non-ACP agents (gemini, aionrs) with native skill support
       const supported = [
-        'gemini',
         'claude',
         'codebuddy',
         'codex',
@@ -101,6 +101,7 @@ describe('initAgent — skill support', () => {
         'kimi',
         'vibe',
         'cursor',
+        'gemini',
         'aionrs',
         'opencode',
       ];
@@ -203,7 +204,9 @@ describe('initAgent — skill support', () => {
         enabledSkills: ['officecli-docx'],
       });
 
+      // aionrs is a non-ACP agent but still supports native skill discovery
       expect(mkdirCalls).toContain('/tmp/workspace/.aionrs/skills');
+      expect(symlinkCalls).toHaveLength(1);
       expect(symlinkCalls[0].target).toBe('/tmp/workspace/.aionrs/skills/officecli-docx');
     });
 

@@ -16,11 +16,12 @@ import type { TaskManager } from '../../TaskManager.ts';
 import type { TeamAgent } from '../../types.ts';
 import { isTeamCapableBackend, getTeamCapableBackends } from '@/common/types/teamTypes.ts';
 import { ProcessConfig } from '@process/utils/initStorage.ts';
-import { acpDetector } from '@process/agent/acp/AcpDetector.ts';
+import { agentRegistry } from '@process/agent/AgentRegistry';
+import { handleListModels } from '../modelListHandler.ts';
 import { notifyMcpReady } from '../../mcpReadiness.ts';
 import { writeTcpMessage, createTcpMessageReader, resolveMcpScriptDir } from '../tcpHelpers.ts';
 
-type SpawnAgentFn = (agentName: string, agentType?: string) => Promise<TeamAgent>;
+type SpawnAgentFn = (agentName: string, agentType?: string, model?: string) => Promise<TeamAgent>;
 
 type TeamMcpServerParams = {
   teamId: string;
@@ -240,6 +241,8 @@ export class TeamMcpServer {
         return this.handleRenameAgent(args);
       case 'team_shutdown_agent':
         return this.handleShutdownAgent(args, fromSlotId);
+      case 'team_list_models':
+        return handleListModels(args);
       default:
         throw new Error(`Unknown tool: ${toolName}`);
     }
@@ -343,15 +346,27 @@ export class TeamMcpServer {
     const { teamId, getAgents, mailbox, spawnAgent } = this.params;
     const name = String(args.name ?? '');
     const agentType = args.agent_type ? String(args.agent_type) : undefined;
+    const model = args.model ? String(args.model) : undefined;
     // Team mode validation: only backends with confirmed ACP MCP stdio support
     if (agentType) {
       const cachedInitResults = await ProcessConfig.get('acp.cachedInitializeResult');
       if (!isTeamCapableBackend(agentType, cachedInitResults)) {
         const capable = getTeamCapableBackends(
-          acpDetector.getDetectedAgents().map((a) => a.backend),
+          agentRegistry.getDetectedAgents().map((a) => a.backend),
           cachedInitResults
         );
         throw new Error(`Agent type "${agentType}" is not supported in team mode. Supported: ${capable.join(', ')}.`);
+      }
+    }
+
+    if (model && agentType) {
+      const cachedModels = await ProcessConfig.get('acp.cachedModels');
+      const available = cachedModels?.[agentType]?.availableModels;
+      if (available && available.length > 0 && !available.some((m: { id: string }) => m.id === model)) {
+        console.warn(
+          `[TeamMcpServer] handleSpawnAgent: model "${model}" not in available models for backend "${agentType}". ` +
+            `Backend will use default model as fallback.`
+        );
       }
     }
 
@@ -359,7 +374,7 @@ export class TeamMcpServer {
       throw new Error('Agent spawning is not available for this team.');
     }
 
-    const newAgent = await spawnAgent(name, agentType);
+    const newAgent = await spawnAgent(name, agentType, model);
     const agents = getAgents();
     const fromAgent =
       (callerSlotId && agents.find((a) => a.slotId === callerSlotId)) ??
@@ -425,7 +440,10 @@ export class TeamMcpServer {
     if (agents.length === 0) {
       return 'No team members yet.';
     }
-    const lines = agents.map((a) => `- ${a.agentName} (type: ${a.agentType}, role: ${a.role}, status: ${a.status})`);
+    const lines = agents.map((a) => {
+      const modelSuffix = a.model ? `, model: ${a.model}` : '';
+      return `- ${a.agentName} (type: ${a.agentType}, role: ${a.role}, status: ${a.status}${modelSuffix})`;
+    });
     return `## Team Members\n${lines.join('\n')}`;
   }
 
