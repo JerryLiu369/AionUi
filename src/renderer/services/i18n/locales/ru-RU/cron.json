@@ -100,7 +100,6 @@
       "executionModeEditHint": "Режим выполнения нельзя изменить после создания. Удалите и создайте задачу заново для смены режима.",
       "advancedSettings": "Расширенные настройки",
       "workspace": "Рабочая область",
-      "workspacePlaceholder": "Выберите рабочую область",
       "workspaceHint": "[Optional: set a workspace folder for file operations]",
       "selectFolder": "[Select Folder]",
       "clearFolder": "[Clear]",

@@ -29,6 +29,9 @@ interface DirectorySelectionModalProps {
   onCancel: () => void;
 }
 
+const DIRECTORY_SELECTION_MODAL_Z_INDEX = 11000;
+const DIRECTORY_SELECTION_MODAL_MASK_Z_INDEX = DIRECTORY_SELECTION_MODAL_Z_INDEX - 10;
+
 const DirectorySelectionModal: React.FC<DirectorySelectionModalProps> = ({
   visible,
   isFileMode = false,
@@ -128,8 +131,8 @@ const DirectorySelectionModal: React.FC<DirectorySelectionModalProps> = ({
       okButtonProps={{ disabled: !selectedPath }}
       className='w-[90vw] md:w-[600px]'
       style={{ width: 'min(600px, 90vw)' }}
-      wrapStyle={{ zIndex: 3000 }}
-      maskStyle={{ zIndex: 2990 }}
+      wrapStyle={{ zIndex: DIRECTORY_SELECTION_MODAL_Z_INDEX }}
+      maskStyle={{ zIndex: DIRECTORY_SELECTION_MODAL_MASK_Z_INDEX }}
       footer={
         <div className='w-full flex justify-between items-center'>
           <div

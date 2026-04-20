@@ -37,8 +37,6 @@ vi.mock('react-i18next', () => ({
       if (key === 'cron.page.scheduleHint') {
         return 'Scheduled tasks use a randomized delay of several minutes for server performance.';
       }
-      if (key === 'team.create.recentLabel') return 'Recent';
-      if (key === 'team.create.chooseDifferentFolder') return 'Choose a different folder';
       if (key.startsWith('cron.page.weekday.')) {
         const day = key.split('.').pop();
         return day?.charAt(0).toUpperCase() + day?.slice(1);
@@ -970,9 +968,7 @@ describe('CreateTaskDialog - schedule preset definitions', () => {
 });
 
 describe('CreateTaskDialog - advanced settings workspace picker', () => {
-  it('reuses the shared workspace picker styling inside advanced settings', () => {
-    localStorage.setItem('aionui:recent-workspaces', JSON.stringify(['/tmp/scheduled-workspace']));
-
+  it('renders the shared workspace picker with the current workspace value', () => {
     const editJob: ICronJob = {
       id: 'job-workspace',
       name: 'Workspace Task',
@@ -1002,16 +998,9 @@ describe('CreateTaskDialog - advanced settings workspace picker', () => {
     render(<CreateTaskDialog visible onClose={vi.fn()} editJob={editJob} conversationId='conv-1' />);
 
     const workspaceTrigger = screen.getByTestId('cron-workspace-trigger');
-    expect(workspaceTrigger.className).toContain('bg-fill-1');
-    expect(workspaceTrigger.className).toContain('border-border-2');
-    expect(workspaceTrigger.className).toContain('py-0');
-    expect(screen.queryByText('Optional workspace')).not.toBeInTheDocument();
-
-    fireEvent.click(workspaceTrigger);
-
-    const workspaceMenu = screen.getByTestId('cron-workspace-menu');
-    expect(workspaceMenu.className).toContain('border-border-1');
-    expect(screen.getAllByText('scheduled-workspace')).toHaveLength(2);
+    expect(workspaceTrigger).toHaveTextContent('/tmp/scheduled-workspace');
+    expect(workspaceTrigger.querySelector('[data-testid="icon-close"]')).not.toBeNull();
+    expect(workspaceTrigger.querySelector('[data-testid="icon-folder-open"]')).not.toBeNull();
   });
 });
 
@@ -1278,8 +1267,6 @@ describe('CreateTaskDialog - advanced settings panel', () => {
   });
 
   it('clears the workspace via the close icon inside the picker', () => {
-    localStorage.setItem('aionui:recent-workspaces', JSON.stringify(['/tmp/ws']));
-
     const editJob: ICronJob = {
       id: 'job-clear',
       name: 'Task',
@@ -1308,17 +1295,14 @@ describe('CreateTaskDialog - advanced settings panel', () => {
 
     render(<CreateTaskDialog visible onClose={vi.fn()} editJob={editJob} conversationId='conv-1' />);
 
-    // Advanced open because workspace was set in agentConfig
     const workspaceTrigger = screen.getByTestId('cron-workspace-trigger');
     expect(workspaceTrigger).toBeInTheDocument();
-    // Clear icon present because workspace has a value
     expect(workspaceTrigger.querySelector('[data-testid="icon-close"]')).not.toBeNull();
 
     fireEvent.click(workspaceTrigger.querySelector('[data-testid="icon-close"]') as Element);
 
-    // After clearing, the trigger swaps back to the empty state affordance.
     expect(workspaceTrigger.querySelector('[data-testid="icon-close"]')).toBeNull();
-    expect(workspaceTrigger.querySelector('[data-testid="icon-down"]')).not.toBeNull();
+    expect(workspaceTrigger.querySelector('[data-testid="icon-folder-open"]')).not.toBeNull();
   });
 
   it('opens advanced panel pre-expanded when editJob has a workspace', () => {

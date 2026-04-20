@@ -256,13 +256,7 @@ const TeamCreateModal: React.FC<Props> = ({ visible, onClose, onCreated }) => {
               value={workspace}
               onChange={setWorkspace}
               placeholder={t('team.create.selectFolder', { defaultValue: 'Select folder' })}
-              inputPlaceholder={t('team.create.workspacePlaceholder', { defaultValue: 'Workspace path (optional)' })}
-              recentLabel={t('team.create.recentLabel', { defaultValue: 'Recent' })}
-              chooseDifferentLabel={t('team.create.chooseDifferentFolder', {
-                defaultValue: 'Choose a different folder',
-              })}
               triggerTestId='team-create-workspace-trigger'
-              menuTestId='team-create-workspace-menu'
             />
           </FormItem>
         </Form>

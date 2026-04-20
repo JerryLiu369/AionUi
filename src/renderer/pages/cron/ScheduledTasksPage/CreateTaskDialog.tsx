@@ -754,14 +754,7 @@ const CreateTaskDialog: React.FC<CreateTaskDialogProps> = ({
                     onChange={(next) => setWorkspace(next || undefined)}
                     onClear={handleWorkspaceClear}
                     placeholder={t('cron.page.form.selectFolder')}
-                    inputPlaceholder={t('cron.page.form.workspacePlaceholder')}
-                    recentLabel={t('team.create.recentLabel', { defaultValue: 'Recent' })}
-                    chooseDifferentLabel={t('team.create.chooseDifferentFolder', {
-                      defaultValue: 'Choose a different folder',
-                    })}
                     triggerTestId='cron-workspace-trigger'
-                    menuTestId='cron-workspace-menu'
-                    menuZIndex={10020}
                   />
                 </div>
               </div>

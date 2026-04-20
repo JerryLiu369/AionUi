@@ -6,7 +6,6 @@
 
 import { ipcBridge } from '@/common';
 import { uuid } from '@/common/utils';
-import { isElectronDesktop } from '@/renderer/utils/platform';
 import { emitter } from '@/renderer/utils/emitter';
 import { useCronJobs } from '@/renderer/pages/cron/useCronJobs';
 import type { TFunction } from 'i18next';
@@ -42,7 +41,6 @@ export function useWorkspaceMigration({
 
   // Migration modal state
   const [showMigrationModal, setShowMigrationModal] = useState(false);
-  const [showDirectorySelector, setShowDirectorySelector] = useState(false);
   const [selectedTargetPath, setSelectedTargetPath] = useState('');
   const [migrationLoading, setMigrationLoading] = useState(false);
   const [showCronMigrationPrompt, setShowCronMigrationPrompt] = useState(false);
@@ -61,33 +59,6 @@ export function useWorkspaceMigration({
       messageApi.error(t('conversation.workspace.contextMenu.revealFailed'));
     }
   }, [messageApi, t, workspace]);
-
-  // Handle directory selection from DirectorySelectionModal (webui)
-  const handleSelectDirectoryFromModal = useCallback((paths: string[] | undefined) => {
-    setShowDirectorySelector(false);
-    if (paths && paths.length > 0) {
-      setSelectedTargetPath(paths[0]);
-    }
-  }, []);
-
-  // Handle folder selection - use native dialog on Electron, modal on webui
-  const handleSelectFolder = useCallback(async () => {
-    if (isElectronDesktop()) {
-      // Electron: use native file dialog
-      try {
-        const openFiles = await ipcBridge.dialog.showOpen.invoke({ properties: ['openDirectory', 'createDirectory'] });
-        if (openFiles && openFiles.length > 0) {
-          setSelectedTargetPath(openFiles[0]);
-        }
-      } catch (_error) {
-        console.error('Failed to open directory dialog:', _error);
-        messageApi.error(t('conversation.workspace.migration.selectFolderError'));
-      }
-    } else {
-      // WebUI: show directory selection modal
-      setShowDirectorySelector(true);
-    }
-  }, [messageApi, t]);
 
   const executeMigration = useCallback(
     async (migrateCron: boolean) => {
@@ -226,21 +197,16 @@ export function useWorkspaceMigration({
   return {
     // State
     showMigrationModal,
-    showDirectorySelector,
     selectedTargetPath,
+    setSelectedTargetPath,
     migrationLoading,
     showCronMigrationPrompt,
 
     // Handlers
     handleOpenMigrationModal,
     handleOpenWorkspaceRoot,
-    handleSelectDirectoryFromModal,
-    handleSelectFolder,
     executeMigration,
     handleMigrationConfirm,
     handleCloseMigrationModal,
-
-    // Directory selector close handler (for onCancel)
-    closeDirectorySelector: useCallback(() => setShowDirectorySelector(false), []),
   };
 }

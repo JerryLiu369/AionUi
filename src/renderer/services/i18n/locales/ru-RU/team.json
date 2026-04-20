@@ -36,7 +36,6 @@
     "namePlaceholder": "Название команды",
     "dispatchAgentPlaceholder": "Выбрать лидера команды",
     "subAgentsPlaceholder": "Выбрать подагентов",
-    "workspacePlaceholder": "Путь к рабочей области (опционально)",
     "confirm": "Создать команду",
     "noSupportedAgents": "Поддерживаемые агенты не установлены",
     "supportedAgentsHint": "Сейчас поддерживаются Claude, Codex, CodeBuddy. Другие агенты скоро появятся.",
@@ -49,8 +48,6 @@
     "nameRequired": "Введите название команды",
     "leaderRequired": "Выберите лидера команды",
     "selectFolder": "Выбрать папку",
-    "recentLabel": "Недавние",
-    "chooseDifferentFolder": "Выбрать другую папку",
     "error": "Не удалось создать команду"
   },
   "removeAgent": {

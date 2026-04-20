@@ -134,9 +134,7 @@ describe('TeamCreateModal', () => {
     expect(screen.getByTestId('team-create-modal-shell')).toHaveAttribute('data-background', 'var(--dialog-fill-0)');
   });
 
-  it('uses brighter surface tokens for leader cards and workspace picker', () => {
-    localStorage.setItem('aionui:recent-workspaces', JSON.stringify(['/tmp/workspace-one']));
-
+  it('highlights the selected leader card and renders the shared workspace picker', () => {
     render(<TeamCreateModal visible onClose={vi.fn()} onCreated={vi.fn()} />);
 
     const geminiCard = screen.getByTestId('team-create-agent-card-cli::gemini');
@@ -151,20 +149,6 @@ describe('TeamCreateModal', () => {
     expect(geminiCard.className).toContain('border-primary-5');
     expect(screen.getByTestId('team-create-agent-selected-badge-cli::gemini')).toBeInTheDocument();
 
-    const workspaceTrigger = screen.getByTestId('team-create-workspace-trigger');
-    expect(workspaceTrigger.className).toContain('bg-fill-1');
-    expect(workspaceTrigger.className).toContain('border-border-2');
-    expect(workspaceTrigger.className).toContain('py-0');
-
-    fireEvent.click(workspaceTrigger);
-
-    const workspaceMenu = screen.getByTestId('team-create-workspace-menu');
-    expect(workspaceMenu.className).toContain('border-border-1');
-    expect(workspaceMenu.className).toContain('shadow-[0_18px_48px_rgba(0,0,0,0.42)]');
-    expect(workspaceMenu).toHaveStyle({ backgroundColor: 'var(--bg-2)', opacity: '1' });
-
-    const recentWorkspace = screen.getByText('workspace-one').parentElement?.parentElement;
-    expect(recentWorkspace?.className).toContain('border');
-    expect(recentWorkspace?.className).toContain('hover:bg-fill-1');
+    expect(screen.getByTestId('team-create-workspace-trigger')).toBeInTheDocument();
   });
 });

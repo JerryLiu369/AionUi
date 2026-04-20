@@ -36,7 +36,6 @@
     "namePlaceholder": "Назва команди",
     "dispatchAgentPlaceholder": "Виберіть лідера команди",
     "subAgentsPlaceholder": "Виберіть субагентів",
-    "workspacePlaceholder": "Шлях до робочої області (опціонально)",
     "confirm": "Створити команду",
     "noSupportedAgents": "Не встановлено жодного підтримуваного агента",
     "supportedAgentsHint": "Наразі підтримуються Claude та Codex. Інші агенти з'являться незабаром.",
@@ -49,8 +48,6 @@
     "nameRequired": "Будь ласка, введіть назву команди",
     "leaderRequired": "Будь ласка, виберіть лідера команди",
     "selectFolder": "Вибрати папку",
-    "recentLabel": "Недавні",
-    "chooseDifferentFolder": "Виберіть іншу папку",
     "error": "Не вдалося створити команду"
   },
   "emptyState": {

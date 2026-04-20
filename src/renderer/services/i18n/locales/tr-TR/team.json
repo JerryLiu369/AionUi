@@ -36,7 +36,6 @@
     "namePlaceholder": "Team name",
     "dispatchAgentPlaceholder": "Takım liderini seçin",
     "subAgentsPlaceholder": "Select sub agents",
-    "workspacePlaceholder": "Workspace path (optional)",
     "confirm": "Create Team",
     "noSupportedAgents": "Desteklenen agent bulunamadı",
     "supportedAgentsHint": "Şu anda Claude ve Codex desteklenmektedir. Daha fazla agent yakında eklenecek.",
@@ -49,8 +48,6 @@
     "nameRequired": "Takım adı girin",
     "leaderRequired": "Takım lideri seçin",
     "selectFolder": "Klasör seç",
-    "recentLabel": "Son kullanılan",
-    "chooseDifferentFolder": "Farklı klasör seç",
     "error": "Takım oluşturulamadı"
   },
   "removeAgent": {

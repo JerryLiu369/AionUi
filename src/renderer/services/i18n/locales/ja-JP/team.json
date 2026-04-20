@@ -36,7 +36,6 @@
     "namePlaceholder": "Team name",
     "dispatchAgentPlaceholder": "チームリーダーを選択",
     "subAgentsPlaceholder": "Select sub agents",
-    "workspacePlaceholder": "Workspace path (optional)",
     "confirm": "Create Team",
     "noSupportedAgents": "対応する Agent が見つかりません",
     "supportedAgentsHint": "現在 Claude と Codex に対応しています。他の Agent は順次対応予定です。",
@@ -49,8 +48,6 @@
     "nameRequired": "チーム名を入力してください",
     "leaderRequired": "チームリーダーを選択してください",
     "selectFolder": "フォルダを選択",
-    "recentLabel": "最近使用",
-    "chooseDifferentFolder": "別のフォルダを選択",
     "error": "チームの作成に失敗しました"
   },
   "removeAgent": {

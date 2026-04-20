@@ -5,9 +5,10 @@
  */
 
 import DirectorySelectionModal from '@/renderer/components/settings/DirectorySelectionModal';
+import { WorkspaceFolderSelect } from '@/renderer/components/workspace';
 import { getLastDirectoryName } from '@/renderer/utils/workspace/workspace';
 import { Modal } from '@arco-design/web-react';
-import { AlarmClock, FolderOpen } from '@icon-park/react';
+import { AlarmClock } from '@icon-park/react';
 import React from 'react';
 import type { TFunction } from 'i18next';
 
@@ -17,17 +18,13 @@ type MigrationModalProps = {
   // Migration modal
   showMigrationModal: boolean;
   handleCloseMigrationModal: () => void;
-  handleSelectFolder: () => void;
   selectedTargetPath: string;
+  setSelectedTargetPath: (value: string) => void;
   migrationLoading: boolean;
   handleMigrationConfirm: () => void;
   // Cron migration modal
   showCronMigrationPrompt: boolean;
   executeMigration: (withCron: boolean) => void;
-  // Directory selection modal (WebUI)
-  showDirectorySelector: boolean;
-  handleSelectDirectoryFromModal: (paths: string[]) => void;
-  closeDirectorySelector: () => void;
   // Host file selector (WebUI)
   showHostFileSelector: boolean;
   handleHostFileSelected: (
@@ -38,21 +35,18 @@ type MigrationModalProps = {
   handleFilesToAdd: (files: Array<{ name: string; path: string }>) => Promise<void>;
 };
 
-/** Combined migration modals: workspace migration, cron migration prompt, and directory selection. */
+/** Combined migration modals: workspace migration, cron migration prompt. */
 const MigrationModal: React.FC<MigrationModalProps> = ({
   workspace,
   t,
   showMigrationModal,
   handleCloseMigrationModal,
-  handleSelectFolder,
   selectedTargetPath,
+  setSelectedTargetPath,
   migrationLoading,
   handleMigrationConfirm,
   showCronMigrationPrompt,
   executeMigration,
-  showDirectorySelector,
-  handleSelectDirectoryFromModal,
-  closeDirectorySelector,
   showHostFileSelector,
   handleHostFileSelected,
   setShowHostFileSelector,
@@ -83,22 +77,11 @@ const MigrationModal: React.FC<MigrationModalProps> = ({
             <div className='text-14px mb-8px' style={{ color: 'var(--color-text-1)' }}>
               {t('conversation.workspace.migration.moveToNewFolder')}
             </div>
-            <div
-              className='flex items-center justify-between px-12px py-10px rounded-8px cursor-pointer transition-colors hover:bg-[var(--color-fill-2)]'
-              style={{
-                backgroundColor: 'var(--color-bg-1)',
-                border: '1px solid var(--color-border-2)',
-              }}
-              onClick={handleSelectFolder}
-            >
-              <span
-                className='text-14px'
-                style={{ color: selectedTargetPath ? 'var(--color-text-1)' : 'var(--color-text-3)' }}
-              >
-                {selectedTargetPath || t('conversation.workspace.migration.selectFolder')}
-              </span>
-              <FolderOpen theme='outline' size='18' fill='var(--color-text-3)' />
-            </div>
+            <WorkspaceFolderSelect
+              value={selectedTargetPath}
+              onChange={setSelectedTargetPath}
+              placeholder={t('conversation.workspace.migration.selectFolder')}
+            />
           </div>
 
           {/* Hint */}
@@ -215,13 +198,6 @@ const MigrationModal: React.FC<MigrationModalProps> = ({
           </div>
         </div>
       </Modal>
-
-      {/* Directory Selection Modal (for WebUI only) */}
-      <DirectorySelectionModal
-        visible={showDirectorySelector}
-        onConfirm={handleSelectDirectoryFromModal}
-        onCancel={closeDirectorySelector}
-      />
 
       {/* Host File Selection Modal (for WebUI workspace + button) */}
       <DirectorySelectionModal

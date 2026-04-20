@@ -244,30 +244,33 @@ const GuidActionRow: React.FC<GuidActionRowProps> = ({
           )}
         </div>
 
-        {!isWebUI && (
-          <Button
-            className='sendbox-model-btn'
-            shape='round'
-            size='small'
-            onClick={() => {
-              ipcBridge.dialog.showOpen
-                .invoke({ properties: ['openDirectory', 'createDirectory'] })
-                .then((dirs) => {
-                  if (dirs && dirs[0]) {
-                    onSelectWorkspace(dirs[0]);
-                  }
-                })
-                .catch((error) => {
-                  console.error('Failed to open directory dialog:', error);
-                });
-            }}
-          >
-            <span className='flex items-center gap-6px leading-none'>
-              <FolderOpen theme='outline' size='14' fill='currentColor' style={{ lineHeight: 0, flexShrink: 0 }} />
-              <span>{t('conversation.welcome.specifyWorkspace')}</span>
-            </span>
-          </Button>
-        )}
+        <Button
+          className='sendbox-model-btn guid-config-btn'
+          shape='round'
+          size='small'
+          onClick={() => {
+            ipcBridge.dialog.showOpen
+              .invoke({ properties: ['openDirectory', 'createDirectory'] })
+              .then((dirs) => {
+                if (dirs && dirs[0]) {
+                  onSelectWorkspace(dirs[0]);
+                }
+              })
+              .catch((error) => {
+                console.error('Failed to open directory dialog:', error);
+              });
+          }}
+        >
+          <span className='flex items-center gap-6px leading-none'>
+            <FolderOpen
+              theme='outline'
+              size='14'
+              fill={iconColors.secondary}
+              style={{ lineHeight: 0, flexShrink: 0 }}
+            />
+            <span>{t('conversation.welcome.specifyWorkspace')}</span>
+          </span>
+        </Button>
 
         <div
           className={`${styles.actionConfigGroup} ${configOptionCount > 1 ? styles.actionConfigGroupWithDivider : ''}`}
