@@ -281,9 +281,14 @@ describe('WeixinConfigForm', () => {
     expect(es?.options).toEqual({ withCredentials: true });
 
     await act(async () => {
-      es?.emit('qr', { qrcodeData: 'ticket_webui_1' });
+      es?.emit('qr', {
+        qrcodeData: 'ticket_webui_1',
+        qrcodeUrl: 'https://liteapp.weixin.qq.com/q/test?qrcode=ticket_webui_1',
+      });
     });
-    expect(screen.getByTestId('webui-qr').textContent).toContain('ticket_webui_1');
+    expect(screen.getByTestId('webui-qr').textContent).toContain(
+      'https://liteapp.weixin.qq.com/q/test?qrcode=ticket_webui_1'
+    );
 
     await act(async () => {
       es?.emit('scanned');

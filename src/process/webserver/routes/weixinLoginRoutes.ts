@@ -29,8 +29,8 @@ export function registerWeixinLoginRoutes(app: Express, validateApiAccess: Reque
     };
 
     const handle = startLogin({
-      onQR: (_pageUrl, qrcodeData) => {
-        send('qr', { qrcodeData });
+      onQR: (pageUrl, qrcodeData) => {
+        send('qr', { qrcodeData, qrcodeUrl: pageUrl });
       },
       onScanned: () => {
         send('scanned', {});

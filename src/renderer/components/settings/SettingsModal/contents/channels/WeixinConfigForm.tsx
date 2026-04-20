@@ -286,8 +286,8 @@ const WeixinConfigForm: React.FC<WeixinConfigFormProps> = ({ pluginStatus, model
     eventSourceRef.current = es;
 
     es.addEventListener('qr', (e: MessageEvent) => {
-      const { qrcodeData } = JSON.parse(e.data) as { qrcodeData: string };
-      setQrcodeDataUrl(qrcodeData);
+      const { qrcodeUrl } = JSON.parse(e.data) as { qrcodeData: string; qrcodeUrl: string };
+      setQrcodeDataUrl(qrcodeUrl);
       setLoginState('showing_qr');
     });
 
