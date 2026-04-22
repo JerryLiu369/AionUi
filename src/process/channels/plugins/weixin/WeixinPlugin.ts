@@ -16,12 +16,48 @@ import type { WeixinChatRequest, WeixinChatResponse } from './WeixinMonitor';
 
 const RESPONSE_TIMEOUT_MS = 5 * 60 * 1000;
 
+type PendingResponseDraft = {
+  messageId: string;
+  order: number;
+  text?: string;
+  mediaActions: IChannelMediaAction[];
+};
+
 interface PendingResponse {
   resolve: (response: WeixinChatResponse) => void;
   reject: (error: Error) => void;
-  accumulatedText: string;
-  mediaActions: IChannelMediaAction[];
+  drafts: PendingResponseDraft[];
+  nextOrder: number;
   timer: ReturnType<typeof setTimeout>;
+}
+
+function createPendingMessageId(chatId: string): string {
+  return `weixin_pending_${chatId}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function applyOutgoingMessageToDraft(draft: PendingResponseDraft, message: IUnifiedOutgoingMessage): void {
+  if (message.text !== undefined) {
+    draft.text = stripHtml(message.text);
+  }
+  if (message.mediaActions !== undefined) {
+    draft.mediaActions = message.mediaActions;
+  }
+}
+
+function hasDraftContent(draft: PendingResponseDraft): boolean {
+  return Boolean(draft.text?.trim()) || draft.mediaActions.length > 0;
+}
+
+function buildResolvedResponse(pending: PendingResponse): WeixinChatResponse {
+  return {
+    messages: pending.drafts
+      .toSorted((a, b) => a.order - b.order)
+      .filter(hasDraftContent)
+      .map((draft) => ({
+        ...(draft.text?.trim() ? { text: draft.text } : {}),
+        ...(draft.mediaActions.length > 0 ? { mediaActions: draft.mediaActions } : {}),
+      })),
+  };
 }
 
 export class WeixinPlugin extends BasePlugin {
@@ -79,31 +115,34 @@ export class WeixinPlugin extends BasePlugin {
 
   async sendMessage(chatId: string, message: IUnifiedOutgoingMessage): Promise<string> {
     const pending = this.pendingResponses.get(chatId);
-    if (pending && message.text !== undefined) {
-      pending.accumulatedText = stripHtml(message.text);
+    const messageId = createPendingMessageId(chatId);
+    if (pending) {
+      const draft: PendingResponseDraft = {
+        messageId,
+        order: pending.nextOrder++,
+        mediaActions: [],
+      };
+      applyOutgoingMessageToDraft(draft, message);
+      pending.drafts.push(draft);
     }
-    return `weixin_pending_${chatId}`;
+    return messageId;
   }
 
-  async editMessage(chatId: string, _messageId: string, message: IUnifiedOutgoingMessage): Promise<void> {
+  async editMessage(chatId: string, messageId: string, message: IUnifiedOutgoingMessage): Promise<void> {
     const pending = this.pendingResponses.get(chatId);
     if (!pending) return;
 
-    if (message.text !== undefined) {
-      pending.accumulatedText = stripHtml(message.text);
-    }
-    if (message.mediaActions) {
-      pending.mediaActions = message.mediaActions;
+    let draft = pending.drafts.find((item) => item.messageId === messageId);
+    if (!draft) {
+      draft = {
+        messageId,
+        order: pending.nextOrder++,
+        mediaActions: [],
+      };
+      pending.drafts.push(draft);
     }
 
-    if (message.replyMarkup !== undefined) {
-      clearTimeout(pending.timer);
-      this.pendingResponses.delete(chatId);
-      pending.resolve({
-        text: pending.accumulatedText || undefined,
-        mediaActions: pending.mediaActions,
-      });
-    }
+    applyOutgoingMessageToDraft(draft, message);
   }
 
   getActiveUserCount(): number {
@@ -140,8 +179,8 @@ export class WeixinPlugin extends BasePlugin {
       this.pendingResponses.set(conversationId, {
         resolve,
         reject,
-        accumulatedText: '',
-        mediaActions: [],
+        drafts: [],
+        nextOrder: 0,
         timer,
       });
 
@@ -167,10 +206,7 @@ export class WeixinPlugin extends BasePlugin {
           if (pending) {
             clearTimeout(pending.timer);
             this.pendingResponses.delete(conversationId);
-            pending.resolve({
-              text: pending.accumulatedText || undefined,
-              mediaActions: pending.mediaActions,
-            });
+            pending.resolve(buildResolvedResponse(pending));
           }
         })
         .catch((error: unknown) => {

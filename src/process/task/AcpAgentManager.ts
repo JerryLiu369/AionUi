@@ -111,6 +111,7 @@ class AcpAgentManager extends BaseAgentManager<AcpAgentManagerData, AcpPermissio
   private nextTrackedTurnId: number = 0;
   private activeTrackedTurnId: number | null = null;
   private activeTrackedTurnHasRuntimeActivity: boolean = false;
+  private activeTrackedTurnRequestSettled: boolean = false;
   private readonly completedTrackedTurnIds = new Set<number>();
   private missingFinishFallbackTimer: ReturnType<typeof setTimeout> | null = null;
   private missingFinishFallbackTurnId: number | null = null;
@@ -188,6 +189,7 @@ class AcpAgentManager extends BaseAgentManager<AcpAgentManagerData, AcpPermissio
     this.nextTrackedTurnId = turnId;
     this.activeTrackedTurnId = turnId;
     this.activeTrackedTurnHasRuntimeActivity = false;
+    this.activeTrackedTurnRequestSettled = false;
     return turnId;
   }
 
@@ -195,6 +197,7 @@ class AcpAgentManager extends BaseAgentManager<AcpAgentManagerData, AcpPermissio
     if (this.activeTrackedTurnId === turnId) {
       this.activeTrackedTurnId = null;
       this.activeTrackedTurnHasRuntimeActivity = false;
+      this.activeTrackedTurnRequestSettled = false;
       this.clearMissingFinishFallback();
     }
     this.completedTrackedTurnIds.add(turnId);
@@ -221,20 +224,24 @@ class AcpAgentManager extends BaseAgentManager<AcpAgentManagerData, AcpPermissio
     if (this.activeTrackedTurnId === turnId) {
       this.activeTrackedTurnId = null;
       this.activeTrackedTurnHasRuntimeActivity = false;
+      this.activeTrackedTurnRequestSettled = false;
       this.clearMissingFinishFallback();
     }
     this.completedTrackedTurnIds.delete(turnId);
   }
 
   private markTrackedTurnRuntimeActivity(): void {
-    this._lastActivityAt = Date.now();
+    const now = Date.now();
+    this._lastActivityAt = now;
 
     if (this.activeTrackedTurnId === null) {
       return;
     }
 
     this.activeTrackedTurnHasRuntimeActivity = true;
-    this.scheduleMissingFinishFallback();
+    if (this.activeTrackedTurnRequestSettled) {
+      this.scheduleMissingFinishFallback();
+    }
   }
 
   private clearMissingFinishFallback(): void {
@@ -245,7 +252,7 @@ class AcpAgentManager extends BaseAgentManager<AcpAgentManagerData, AcpPermissio
     this.missingFinishFallbackTurnId = null;
   }
 
-  private scheduleMissingFinishFallback(): void {
+  private scheduleMissingFinishFallback(delayMs = this.missingFinishFallbackDelayMs): void {
     const turnId = this.activeTrackedTurnId;
     if (turnId === null) {
       return;
@@ -255,7 +262,24 @@ class AcpAgentManager extends BaseAgentManager<AcpAgentManagerData, AcpPermissio
     this.missingFinishFallbackTurnId = turnId;
     this.missingFinishFallbackTimer = setTimeout(() => {
       void this.handleMissingFinishFallback(turnId);
-    }, this.missingFinishFallbackDelayMs);
+    }, delayMs);
+  }
+
+  private markTrackedTurnRequestSettled(turnId: number): void {
+    if (this.activeTrackedTurnId !== turnId || this.completedTrackedTurnIds.has(turnId)) {
+      return;
+    }
+
+    this.activeTrackedTurnRequestSettled = true;
+    if (!this.activeTrackedTurnHasRuntimeActivity) {
+      return;
+    }
+
+    const remainingDelay =
+      this._lastActivityAt === null
+        ? this.missingFinishFallbackDelayMs
+        : Math.max(0, this.missingFinishFallbackDelayMs - (Date.now() - this._lastActivityAt));
+    this.scheduleMissingFinishFallback(remainingDelay);
   }
 
   private async handleMissingFinishFallback(turnId: number): Promise<void> {
@@ -373,6 +397,7 @@ ${collectedResponses.join('\n')}`;
         return result;
       }
 
+      this.markTrackedTurnRequestSettled(turnId);
       if (this.activeTrackedTurnId === turnId && this.activeTrackedTurnHasRuntimeActivity) {
         return result;
       }

@@ -109,8 +109,7 @@ describe('WeixinPlugin — Promise bridge', () => {
     await new Promise((r) => setTimeout(r, 20));
 
     const response = await chatPromise;
-    expect(response.text).toBe('Final answer');
-    expect(response.mediaActions).toEqual([]);
+    expect(response.messages).toEqual([{ text: 'Final answer' }]);
     expect(received).toHaveLength(1);
   });
 
@@ -133,7 +132,7 @@ describe('WeixinPlugin — Promise bridge', () => {
     await plugin.start();
     const { agent } = mockStartFn.mock.calls[0][0] as MonitorOptions;
     const response = await agent.chat({ conversationId: 'user_abc', text: 'hi' });
-    expect(response.text).toBe('final complete text');
+    expect(response.messages).toEqual([{ text: 'final complete text' }]);
   });
 
   it('resolves mediaActions even when final visible text is empty', async () => {
@@ -155,8 +154,40 @@ describe('WeixinPlugin — Promise bridge', () => {
     const { agent } = mockStartFn.mock.calls[0][0] as MonitorOptions;
     const response = await agent.chat({ conversationId: 'user_abc', text: 'hi' });
 
-    expect(response.text).toBeUndefined();
-    expect(response.mediaActions).toEqual([{ type: 'file', path: '/tmp/report.pdf', fileName: 'report.pdf' }]);
+    expect(response.messages).toEqual([
+      {
+        mediaActions: [{ type: 'file', path: '/tmp/report.pdf', fileName: 'report.pdf' }],
+      },
+    ]);
+  });
+
+  it('preserves multiple messages in send/edit order', async () => {
+    const WeixinPlugin = await loadPluginClass();
+    const plugin = new WeixinPlugin();
+    await plugin.initialize(createConfig());
+
+    plugin.onMessage(async (msg) => {
+      const progressMessageId = await plugin.sendMessage(msg.chatId, { type: 'text', text: 'Processing...' });
+      await plugin.editMessage(msg.chatId, progressMessageId, {
+        type: 'text',
+        text: 'I am checking the workspace now.',
+      });
+      const resultMessageId = await plugin.sendMessage(msg.chatId, { type: 'text', text: 'placeholder' });
+      await plugin.editMessage(msg.chatId, resultMessageId, {
+        type: 'text',
+        text: 'Check complete, report generated.',
+        replyMarkup: {},
+      });
+    });
+
+    await plugin.start();
+    const { agent } = mockStartFn.mock.calls[0][0] as MonitorOptions;
+    const response = await agent.chat({ conversationId: 'user_abc', text: 'hi' });
+
+    expect(response.messages).toEqual([
+      { text: 'I am checking the workspace now.' },
+      { text: 'Check complete, report generated.' },
+    ]);
   });
 
   it('rejects superseded Promise when second chat arrives before first resolves', async () => {

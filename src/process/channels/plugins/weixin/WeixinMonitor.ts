@@ -27,8 +27,10 @@ export type WeixinChatRequest = {
 };
 
 export type WeixinChatResponse = {
-  text?: string;
-  mediaActions?: IChannelMediaAction[];
+  messages: Array<{
+    text?: string;
+    mediaActions?: IChannelMediaAction[];
+  }>;
 };
 
 export type WeixinAgent = {
@@ -683,32 +685,46 @@ async function runMonitor(
         }
         // oxlint-disable-next-line eslint/no-await-in-loop
         await stopTyping();
-        const fallbackNotices: string[] = [];
-        for (const mediaAction of response.mediaActions ?? []) {
-          try {
-            if (mediaAction.caption) {
-              // Match openclaw-weixin ordering: send caption text before media item.
+        for (const [index, responseMessage] of response.messages.entries()) {
+          const fallbackNotices: string[] = [];
+          for (const mediaAction of responseMessage.mediaActions ?? []) {
+            try {
+              if (mediaAction.caption) {
+                // Match openclaw-weixin ordering: send caption text before media item.
+                // oxlint-disable-next-line eslint/no-await-in-loop
+                await callSendMessage(
+                  baseUrl,
+                  token,
+                  wechatUin,
+                  conversationId,
+                  mediaAction.caption,
+                  msg.context_token
+                );
+              }
               // oxlint-disable-next-line eslint/no-await-in-loop
-              await callSendMessage(baseUrl, token, wechatUin, conversationId, mediaAction.caption, msg.context_token);
+              const uploaded = await uploadMediaAction(baseUrl, token, wechatUin, conversationId, mediaAction, log);
+              // oxlint-disable-next-line eslint/no-await-in-loop
+              await callSendMediaMessage(baseUrl, token, wechatUin, conversationId, uploaded, msg.context_token);
+            } catch (sendErr) {
+              const failedName = mediaAction.fileName || path.basename(mediaAction.path);
+              fallbackNotices.push(i18n.t('settings.channels.mediaSendFailed', { name: failedName }));
+              log(`[weixin] media send error for ${conversationId}#${index + 1}: ${formatError(sendErr)}`);
             }
-            // oxlint-disable-next-line eslint/no-await-in-loop
-            const uploaded = await uploadMediaAction(baseUrl, token, wechatUin, conversationId, mediaAction, log);
-            // oxlint-disable-next-line eslint/no-await-in-loop
-            await callSendMediaMessage(baseUrl, token, wechatUin, conversationId, uploaded, msg.context_token);
-          } catch (sendErr) {
-            const failedName = mediaAction.fileName || path.basename(mediaAction.path);
-            fallbackNotices.push(i18n.t('settings.channels.mediaSendFailed', { name: failedName }));
-            log(`[weixin] media send error for ${conversationId}: ${formatError(sendErr)}`);
           }
-        }
 
-        const finalText = [response.text, ...fallbackNotices].filter(Boolean).join('\n\n');
-        if (finalText) {
+          const finalText = [responseMessage.text, ...fallbackNotices].filter(Boolean).join('\n\n');
+          if (!finalText) {
+            continue;
+          }
+
           try {
             // oxlint-disable-next-line eslint/no-await-in-loop
             await callSendMessage(baseUrl, token, wechatUin, conversationId, finalText, msg.context_token);
+            log(
+              `[weixin] sent response item ${index + 1}/${response.messages.length} for ${conversationId}: text_length=${finalText.length}, media_actions=${responseMessage.mediaActions?.length ?? 0}`
+            );
           } catch (sendErr) {
-            log(`[weixin] send error for ${conversationId}: ${formatError(sendErr)}`);
+            log(`[weixin] send error for ${conversationId}#${index + 1}: ${formatError(sendErr)}`);
           }
         }
       }
