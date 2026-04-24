@@ -1,7 +1,31 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ChannelMessageService } from '@process/channels/agent/ChannelMessageService';
+import { ChannelMessageService, type StreamCallback } from '@process/channels/agent/ChannelMessageService';
+import type { IAgentMessageEvent } from '@process/channels/agent/ChannelEventBus';
 import { workerTaskManager } from '@process/task/workerTaskManagerSingleton';
 import * as databaseModule from '@process/services/database';
+
+type TestStreamState = {
+  msgId: string;
+  callback: StreamCallback;
+  buffer: string;
+  resolve: (value: string) => void;
+  reject: (error: Error) => void;
+  turnCount: number;
+  finishCount: number;
+  lastVisibleMessageType?: string;
+  hasAnswerMessage?: boolean;
+  hasNonAnswerMessage?: boolean;
+  finishTimer?: ReturnType<typeof setTimeout>;
+};
+
+type ChannelMessageServiceHarness = Pick<ChannelMessageService, 'clearStreamByConversationId' | 'sendMessage'> & {
+  activeStreams: Map<string, TestStreamState>;
+  handleAgentMessage: (event: IAgentMessageEvent) => void;
+};
+
+function createServiceHarness(): ChannelMessageServiceHarness {
+  return new ChannelMessageService() as unknown as ChannelMessageServiceHarness;
+}
 
 const flushMicrotasks = async (count = 5) => {
   for (let i = 0; i < count; i++) {
@@ -21,7 +45,7 @@ describe('ChannelMessageService', () => {
   });
 
   it('waits for Gemini continuation after a tool-only finish', async () => {
-    const service = new ChannelMessageService() as any;
+    const service = createServiceHarness();
     const callback = vi.fn();
     const resolve = vi.fn();
     const reject = vi.fn();
@@ -78,7 +102,7 @@ describe('ChannelMessageService', () => {
   });
 
   it('waits for ACP continuation after a tool-only finish', async () => {
-    const service = new ChannelMessageService() as any;
+    const service = createServiceHarness();
     const callback = vi.fn();
     const resolve = vi.fn();
     const reject = vi.fn();
@@ -120,7 +144,7 @@ describe('ChannelMessageService', () => {
   });
 
   it('waits for Codex continuation after a tool-only finish', async () => {
-    const service = new ChannelMessageService() as any;
+    const service = createServiceHarness();
     const callback = vi.fn();
     const resolve = vi.fn();
     const reject = vi.fn();
@@ -162,7 +186,7 @@ describe('ChannelMessageService', () => {
   });
 
   it('resolves a tool-only stream after the continuation wait expires', async () => {
-    const service = new ChannelMessageService() as any;
+    const service = createServiceHarness();
     const callback = vi.fn();
     const resolve = vi.fn();
     const reject = vi.fn();
@@ -195,8 +219,56 @@ describe('ChannelMessageService', () => {
     expect(resolve).toHaveBeenCalledWith('msg-timeout');
   });
 
+  it('waits for continuation when a tool-only turn also emits thinking', async () => {
+    const service = createServiceHarness();
+    const callback = vi.fn();
+    const resolve = vi.fn();
+    const reject = vi.fn();
+
+    service.activeStreams.set('conv-thinking', {
+      msgId: 'msg-thinking',
+      callback,
+      buffer: '',
+      resolve,
+      reject,
+      turnCount: 0,
+      finishCount: 0,
+      lastVisibleMessageType: undefined,
+      finishTimer: undefined,
+    });
+
+    service.handleAgentMessage({ conversation_id: 'conv-thinking', type: 'start', msg_id: 'msg-thinking', data: '' });
+    service.handleAgentMessage({
+      conversation_id: 'conv-thinking',
+      type: 'thinking',
+      msg_id: 'thinking-1',
+      data: { content: 'checking files', status: 'thinking' },
+    });
+    service.handleAgentMessage({
+      conversation_id: 'conv-thinking',
+      type: 'acp_tool_call',
+      msg_id: 'msg-thinking',
+      data: { update: { toolCallId: 'tool-thinking', status: 'executing' } },
+    });
+    service.handleAgentMessage({ conversation_id: 'conv-thinking', type: 'finish', msg_id: 'msg-thinking', data: '' });
+
+    await vi.advanceTimersByTimeAsync(14_000);
+    expect(resolve).not.toHaveBeenCalled();
+
+    service.handleAgentMessage({ conversation_id: 'conv-thinking', type: 'start', msg_id: 'msg-thinking', data: '' });
+    service.handleAgentMessage({
+      conversation_id: 'conv-thinking',
+      type: 'content',
+      msg_id: 'msg-thinking',
+      data: 'Final answer after thinking',
+    });
+    service.handleAgentMessage({ conversation_id: 'conv-thinking', type: 'finish', msg_id: 'msg-thinking', data: '' });
+
+    expect(resolve).toHaveBeenCalledWith('msg-thinking');
+  });
+
   it('still resolves immediately for plain text responses', () => {
-    const service = new ChannelMessageService() as any;
+    const service = createServiceHarness();
     const callback = vi.fn();
     const resolve = vi.fn();
     const reject = vi.fn();
@@ -226,7 +298,7 @@ describe('ChannelMessageService', () => {
   });
 
   it('settles a waiting tool-only stream before replacing it with a new send', async () => {
-    const service = new ChannelMessageService() as any;
+    const service = createServiceHarness();
     const oldResolve = vi.fn();
     const oldReject = vi.fn();
 
@@ -244,13 +316,13 @@ describe('ChannelMessageService', () => {
 
     vi.spyOn(databaseModule, 'getDatabase').mockResolvedValue({
       getConversation: () => ({ success: false }),
-    } as any);
+    } as unknown as Awaited<ReturnType<typeof databaseModule.getDatabase>>);
 
     const sendTaskMessage = vi.fn().mockResolvedValue(undefined);
     vi.spyOn(workerTaskManager, 'getOrBuildTask').mockResolvedValue({
       type: 'gemini',
       sendMessage: sendTaskMessage,
-    } as any);
+    } as unknown as Awaited<ReturnType<typeof workerTaskManager.getOrBuildTask>>);
 
     const newStreamPromise = service.sendMessage('session-1', 'conv-3', 'hello', vi.fn());
     await flushMicrotasks();

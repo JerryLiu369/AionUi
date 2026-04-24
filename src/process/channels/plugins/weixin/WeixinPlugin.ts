@@ -217,7 +217,8 @@ export class WeixinPlugin extends BasePlugin {
 
   private updateDraft(pending: PendingResponse, text: string): void {
     const plainText = stripHtml(text);
-    if (!plainText.trim() || plainText.startsWith('⏳ Thinking...')) {
+    const trimmedPlainText = plainText.trim();
+    if (!trimmedPlainText || trimmedPlainText === '⏳ Thinking...') {
       pending.draftText = '';
       pending.hasDraft = false;
       return;

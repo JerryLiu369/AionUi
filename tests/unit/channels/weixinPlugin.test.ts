@@ -225,6 +225,35 @@ describe('WeixinPlugin — Promise bridge', () => {
     expect(response.text).toBeUndefined();
   });
 
+  it('sends legitimate assistant text that begins with the thinking placeholder literal', async () => {
+    const WeixinPlugin = await loadPluginClass();
+    const plugin = new WeixinPlugin();
+    await plugin.initialize(createConfig());
+
+    const sentNow: string[] = [];
+    plugin.onMessage(async (msg) => {
+      const msgId = await plugin.sendMessage(msg.chatId, { type: 'text', text: '⏳ Thinking...' });
+      await plugin.editMessage(msg.chatId, msgId, {
+        type: 'text',
+        text: '⏳ Thinking... is the literal text you asked me to print.',
+        replyMarkup: {},
+      });
+    });
+
+    await plugin.start();
+    const { agent } = mockStartFn.mock.calls[0][0] as MonitorOptions;
+    const response = await agent.chat({
+      conversationId: 'user_abc',
+      text: 'hi',
+      sendTextNow: async (text) => {
+        sentNow.push(text);
+      },
+    });
+
+    expect(sentNow).toEqual(['⏳ Thinking... is the literal text you asked me to print.']);
+    expect(response.text).toBeUndefined();
+  });
+
   it('flushes an assistant text draft before a silent intermediate event', async () => {
     const WeixinPlugin = await loadPluginClass();
     const plugin = new WeixinPlugin();

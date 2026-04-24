@@ -52,7 +52,8 @@ function isNonAnswerMessage(message: TMessage): boolean {
     message.type === 'tool_call' ||
     message.type === 'acp_tool_call' ||
     message.type === 'codex_tool_call' ||
-    message.type === 'plan'
+    message.type === 'plan' ||
+    message.type === 'thinking'
   );
 }
 
