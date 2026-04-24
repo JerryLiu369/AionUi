@@ -77,6 +77,124 @@ describe('ChannelMessageService', () => {
     );
   });
 
+  it('waits for ACP continuation after a tool-only finish', async () => {
+    const service = new ChannelMessageService() as any;
+    const callback = vi.fn();
+    const resolve = vi.fn();
+    const reject = vi.fn();
+
+    service.activeStreams.set('conv-acp', {
+      msgId: 'msg-acp',
+      callback,
+      buffer: '',
+      resolve,
+      reject,
+      turnCount: 0,
+      finishCount: 0,
+      lastVisibleMessageType: undefined,
+      finishTimer: undefined,
+    });
+
+    service.handleAgentMessage({ conversation_id: 'conv-acp', type: 'start', msg_id: 'msg-acp', data: '' });
+    service.handleAgentMessage({
+      conversation_id: 'conv-acp',
+      type: 'acp_tool_call',
+      msg_id: 'msg-acp',
+      data: { update: { toolCallId: 'tool-acp', status: 'executing' } },
+    });
+    service.handleAgentMessage({ conversation_id: 'conv-acp', type: 'finish', msg_id: 'msg-acp', data: '' });
+
+    await vi.advanceTimersByTimeAsync(14_000);
+    expect(resolve).not.toHaveBeenCalled();
+
+    service.handleAgentMessage({ conversation_id: 'conv-acp', type: 'start', msg_id: 'msg-acp', data: '' });
+    service.handleAgentMessage({
+      conversation_id: 'conv-acp',
+      type: 'content',
+      msg_id: 'msg-acp',
+      data: 'Final answer from ACP',
+    });
+    service.handleAgentMessage({ conversation_id: 'conv-acp', type: 'finish', msg_id: 'msg-acp', data: '' });
+
+    expect(resolve).toHaveBeenCalledWith('msg-acp');
+  });
+
+  it('waits for Codex continuation after a tool-only finish', async () => {
+    const service = new ChannelMessageService() as any;
+    const callback = vi.fn();
+    const resolve = vi.fn();
+    const reject = vi.fn();
+
+    service.activeStreams.set('conv-codex', {
+      msgId: 'msg-codex',
+      callback,
+      buffer: '',
+      resolve,
+      reject,
+      turnCount: 0,
+      finishCount: 0,
+      lastVisibleMessageType: undefined,
+      finishTimer: undefined,
+    });
+
+    service.handleAgentMessage({ conversation_id: 'conv-codex', type: 'start', msg_id: 'msg-codex', data: '' });
+    service.handleAgentMessage({
+      conversation_id: 'conv-codex',
+      type: 'codex_tool_call',
+      msg_id: 'msg-codex',
+      data: { toolCallId: 'tool-codex', status: 'executing', kind: 'execute' },
+    });
+    service.handleAgentMessage({ conversation_id: 'conv-codex', type: 'finish', msg_id: 'msg-codex', data: '' });
+
+    await vi.advanceTimersByTimeAsync(14_000);
+    expect(resolve).not.toHaveBeenCalled();
+
+    service.handleAgentMessage({ conversation_id: 'conv-codex', type: 'start', msg_id: 'msg-codex', data: '' });
+    service.handleAgentMessage({
+      conversation_id: 'conv-codex',
+      type: 'content',
+      msg_id: 'msg-codex',
+      data: 'Final answer from Codex',
+    });
+    service.handleAgentMessage({ conversation_id: 'conv-codex', type: 'finish', msg_id: 'msg-codex', data: '' });
+
+    expect(resolve).toHaveBeenCalledWith('msg-codex');
+  });
+
+  it('resolves a tool-only stream after the continuation wait expires', async () => {
+    const service = new ChannelMessageService() as any;
+    const callback = vi.fn();
+    const resolve = vi.fn();
+    const reject = vi.fn();
+
+    service.activeStreams.set('conv-timeout', {
+      msgId: 'msg-timeout',
+      callback,
+      buffer: '',
+      resolve,
+      reject,
+      turnCount: 0,
+      finishCount: 0,
+      lastVisibleMessageType: undefined,
+      finishTimer: undefined,
+    });
+
+    service.handleAgentMessage({ conversation_id: 'conv-timeout', type: 'start', msg_id: 'msg-timeout', data: '' });
+    service.handleAgentMessage({
+      conversation_id: 'conv-timeout',
+      type: 'plan',
+      msg_id: 'msg-timeout',
+      data: { sessionId: 'session-1', entries: [] },
+    });
+    service.handleAgentMessage({ conversation_id: 'conv-timeout', type: 'finish', msg_id: 'msg-timeout', data: '' });
+
+    await vi.advanceTimersByTimeAsync(14_999);
+    expect(resolve).not.toHaveBeenCalled();
+
+    await vi.advanceTimersByTimeAsync(1);
+    expect(resolve).toHaveBeenCalledWith('msg-timeout');
+  });
+
   it('still resolves immediately for plain text responses', () => {
     const service = new ChannelMessageService() as any;
     const callback = vi.fn();
